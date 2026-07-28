@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import TrustBar from "@/components/TrustBar";
 import CatNav from "@/components/CatNav";
 import MenuBody from "@/components/MenuBody";
+import Footer from "@/components/Footer";
 import Customizer from "@/components/Customizer";
 import HalfHalf from "@/components/HalfHalf";
 import StickBuilder from "@/components/StickBuilder";
@@ -25,6 +26,7 @@ export default function ClientApp({ lang }: { lang: Lang }) {
           <TrustBar />
           <CatNav />
           <MenuBody />
+          <Footer />
           <Customizer />
           <HalfHalf />
           <StickBuilder />

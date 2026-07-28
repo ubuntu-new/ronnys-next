@@ -146,6 +146,9 @@ export const I18N: Record<Lang, Record<string, string>> = {
     co_name_ph: `Your name`,
     co_phone_ph: `+995 ...`,
     co_address_ph: `Street, building, apartment`,
+    footer_follow: `Follow us`,
+    footer_menu: `Menu`,
+    footer_rights: `All rights reserved.`,
   },
   ka: {
     deliver_to: `მიწოდება:`,
@@ -280,6 +283,9 @@ export const I18N: Record<Lang, Record<string, string>> = {
     co_name_ph: `შენი სახელი`,
     co_phone_ph: `+995 ...`,
     co_address_ph: `ქუჩა, შენობა, ბინა`,
+    footer_follow: `გამოგვყევი`,
+    footer_menu: `მენიუ`,
+    footer_rights: `ყველა უფლება დაცულია.`,
   },
 };
 
