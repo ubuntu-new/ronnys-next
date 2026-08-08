@@ -7,3 +7,5 @@ build/
 .DS_Store
 *.tsbuildinfo
 next-env.d.ts
+
+scripts/serviceAccount.json
