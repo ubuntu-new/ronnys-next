@@ -1,0 +1,159 @@
+/* ── Ronny's Admin — საიტის დიზაინის ტოკენებზე დაშენებული ── */
+
+:root {
+  --a-saffron: #f1c338;
+  --a-orange: #c8692e;
+  --a-ink: #1c1917;
+  --a-muted: #78716c;
+  --a-line: #e7e5e4;
+  --a-bg: #faf9f7;
+  --a-panel: #ffffff;
+  --a-ok: #3f7d3f;
+  --a-danger: #b3261e;
+  --a-radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+.admin-body {
+  margin: 0;
+  background: var(--a-bg);
+  color: var(--a-ink);
+  font-family: "Noto Sans", "Noto Sans Georgian", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.admin-shell { display: flex; min-height: 100vh; }
+
+/* ── Sidebar ── */
+.admin-side {
+  width: 220px;
+  flex: 0 0 220px;
+  background: var(--a-ink);
+  color: #f5f5f4;
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+}
+.admin-brand {
+  font-family: "Noto Serif", "Noto Serif Georgian", Georgia, serif;
+  font-size: 20px;
+  padding: 0 20px 18px;
+  border-bottom: 1px solid #37322f;
+  margin-bottom: 12px;
+}
+.admin-brand span { color: var(--a-saffron); }
+.admin-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
+.admin-nav a {
+  color: #d6d3d1;
+  text-decoration: none;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.admin-nav a:hover { background: #292524; color: #fff; }
+.admin-nav a.active { background: var(--a-orange); color: #fff; }
+.admin-side-foot { margin-top: auto; padding: 16px 20px 0; border-top: 1px solid #37322f; font-size: 13px; color: #a8a29e; }
+.admin-side-foot form { margin-top: 8px; }
+.admin-side-foot button {
+  background: none; border: 1px solid #57534e; color: #d6d3d1;
+  padding: 6px 10px; border-radius: 7px; cursor: pointer; font-size: 13px;
+}
+.admin-side-foot button:hover { border-color: var(--a-saffron); color: var(--a-saffron); }
+
+/* ── Main ── */
+.admin-main { flex: 1; padding: 26px 30px 60px; min-width: 0; }
+.admin-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.admin-head h1 {
+  font-family: "Noto Serif", "Noto Serif Georgian", Georgia, serif;
+  font-size: 24px; margin: 0; font-weight: 600;
+}
+.admin-head p { margin: 4px 0 0; color: var(--a-muted); font-size: 14px; }
+
+/* ── Cards / stats ── */
+.admin-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 26px; }
+.admin-stat {
+  background: var(--a-panel); border: 1px solid var(--a-line);
+  border-radius: var(--a-radius); padding: 14px 16px;
+}
+.admin-stat b { display: block; font-size: 26px; font-family: "Noto Serif", Georgia, serif; }
+.admin-stat span { color: var(--a-muted); font-size: 13px; }
+
+.admin-panel {
+  background: var(--a-panel); border: 1px solid var(--a-line);
+  border-radius: var(--a-radius); padding: 18px 20px; margin-bottom: 20px;
+}
+.admin-panel h2 { font-size: 16px; margin: 0 0 14px; font-weight: 600; }
+
+/* ── Table ── */
+.admin-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.admin-table th {
+  text-align: left; font-weight: 600; color: var(--a-muted);
+  font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+  padding: 8px 10px; border-bottom: 1px solid var(--a-line);
+}
+.admin-table td { padding: 10px; border-bottom: 1px solid var(--a-line); vertical-align: middle; }
+.admin-table tr:hover td { background: #fdfcfb; }
+.admin-table a { color: var(--a-orange); text-decoration: none; font-weight: 500; }
+.admin-table a:hover { text-decoration: underline; }
+.admin-thumb { width: 38px; height: 38px; object-fit: contain; border-radius: 6px; background: #f5f5f4; }
+
+/* ── Badges ── */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+.badge-on { background: #e8f2e8; color: var(--a-ok); }
+.badge-off { background: #f5f5f4; color: var(--a-muted); }
+.badge-promo { background: #fdf3d6; color: #8a6a12; }
+
+/* ── Forms ── */
+.admin-form { display: grid; gap: 16px; max-width: 720px; }
+.field { display: grid; gap: 5px; }
+.field label { font-size: 13px; font-weight: 500; color: #44403c; }
+.field input[type="text"], .field input[type="number"], .field input[type="password"], .field textarea, .field select {
+  border: 1px solid var(--a-line); border-radius: 8px; padding: 9px 11px;
+  font: inherit; background: #fff; width: 100%;
+}
+.field input:focus, .field textarea:focus, .field select:focus {
+  outline: none; border-color: var(--a-saffron); box-shadow: 0 0 0 3px rgba(241, 195, 56, .25);
+}
+.field textarea { min-height: 70px; resize: vertical; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.field-check { display: flex; align-items: center; gap: 8px; }
+.field-check input { width: 16px; height: 16px; }
+.field-check label { font-size: 14px; }
+.hint { font-size: 12px; color: var(--a-muted); }
+
+.btn {
+  background: var(--a-orange); color: #fff; border: 0;
+  padding: 10px 18px; border-radius: 8px; font: inherit; font-weight: 500; cursor: pointer;
+}
+.btn:hover { background: #b25b26; }
+.btn-ghost { background: none; color: var(--a-muted); border: 1px solid var(--a-line); }
+.btn-ghost:hover { background: #f5f5f4; color: var(--a-ink); }
+.form-actions { display: flex; gap: 10px; align-items: center; }
+
+.alert { padding: 10px 14px; border-radius: 8px; font-size: 14px; margin-bottom: 14px; }
+.alert-error { background: #fdecea; color: var(--a-danger); }
+.alert-ok { background: #e8f2e8; color: var(--a-ok); }
+
+/* ── Login ── */
+.login-wrap { min-height: 100vh; display: grid; place-items: center; background: var(--a-bg); padding: 20px; }
+.login-card {
+  background: #fff; border: 1px solid var(--a-line); border-radius: 14px;
+  padding: 30px; width: 100%; max-width: 380px;
+}
+.login-card h1 {
+  font-family: "Noto Serif", "Noto Serif Georgian", Georgia, serif;
+  font-size: 22px; margin: 0 0 4px; text-align: center;
+}
+.login-card h1 span { color: var(--a-saffron); }
+.login-card .sub { text-align: center; color: var(--a-muted); font-size: 13px; margin: 0 0 22px; }
+.login-card .btn { width: 100%; margin-top: 4px; }
+
+@media (max-width: 760px) {
+  .admin-shell { flex-direction: column; }
+  .admin-side { width: 100%; flex: none; }
+  .admin-nav { flex-direction: row; flex-wrap: wrap; }
+  .admin-main { padding: 20px 16px 50px; }
+  .field-row { grid-template-columns: 1fr; }
+}
