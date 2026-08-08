@@ -9,11 +9,9 @@ import { fdBool, fdNum, fdStr } from "@/lib/admin-utils";
 /** სიის გვერდიდან — ყველა ტოპინგის ფასი/სტატუსი ერთი შენახვით. */
 export async function saveToppingPrices(fd: FormData) {
   const session = await requirePermission("can_edit_menu");
-
-  const toppings = await db.topping.findMany({ include: { prices: true } });
+  const toppings = await db.topping.findMany({ where: { deletedAt: null }, include: { prices: true } });
 
   for (const t of toppings) {
-    // checkbox გამორთულზე საერთოდ არ იგზავნება — ამიტომ ცალკე hidden ველი გვაქვს
     if (fd.get(`present_${t.id}`) !== null) {
       await db.topping.update({
         where: { id: t.id },
@@ -22,9 +20,7 @@ export async function saveToppingPrices(fd: FormData) {
     }
     for (const p of t.prices) {
       const v = fdNum(fd, `price_${t.id}_${p.sizeKey}`);
-      if (v !== null) {
-        await db.toppingPrice.update({ where: { id: p.id }, data: { price: v } });
-      }
+      if (v !== null) await db.toppingPrice.update({ where: { id: p.id }, data: { price: v } });
     }
   }
 
@@ -34,6 +30,39 @@ export async function saveToppingPrices(fd: FormData) {
 
   revalidatePath("/admin/toppings");
   redirect("/admin/toppings?saved=1");
+}
+
+/** ახალი ტოპინგი — სამი ზომის ფასით. */
+export async function createTopping(fd: FormData) {
+  const session = await requirePermission("can_edit_menu");
+
+  const nameEn = fdStr(fd, "name_en");
+  if (!nameEn) throw new Error("ინგლისური სახელი სავალდებულოა");
+
+  const t = await db.topping.create({
+    data: {
+      name: { en: nameEn, ka: fdStr(fd, "name_ka") || nameEn },
+      category: fdStr(fd, "category") || null,
+      recipeOnly: fdBool(fd, "recipeOnly"),
+      active: true,
+      sortOrder: 999,
+    },
+  });
+
+  await db.toppingPrice.createMany({
+    data: ["S", "M", "XL"].map((sizeKey) => ({
+      toppingId: t.id,
+      sizeKey,
+      price: fdNum(fd, `price_${sizeKey}`) ?? 0,
+    })),
+  });
+
+  await db.auditLog.create({
+    data: { action: "topping.create", entityType: "Topping", entityId: t.id, employeeId: session.sub },
+  });
+
+  revalidatePath("/admin/toppings");
+  redirect(`/admin/toppings/${t.id}`);
 }
 
 /** ერთი ტოპინგის სრული რედაქტირება. */
@@ -61,10 +90,33 @@ export async function updateTopping(id: string, fd: FormData) {
     if (v !== null) await db.toppingPrice.update({ where: { id: p.id }, data: { price: v } });
   }
 
+  const newKey = fdStr(fd, "newsize_key");
+  if (newKey) {
+    await db.toppingPrice.upsert({
+      where: { toppingId_sizeKey: { toppingId: id, sizeKey: newKey } },
+      update: { price: fdNum(fd, "newsize_price") ?? 0 },
+      create: { toppingId: id, sizeKey: newKey, price: fdNum(fd, "newsize_price") ?? 0 },
+    });
+  }
+
   await db.auditLog.create({
     data: { action: "topping.update", entityType: "Topping", entityId: id, employeeId: session.sub },
   });
 
   revalidatePath("/admin/toppings");
   redirect("/admin/toppings?saved=1");
+}
+
+/** არქივში გადატანა — ფიზიკურად არაფერი იშლება. */
+export async function archiveTopping(id: string) {
+  const session = await requirePermission("can_edit_menu");
+
+  await db.topping.update({ where: { id }, data: { deletedAt: new Date() } });
+
+  await db.auditLog.create({
+    data: { action: "topping.archive", entityType: "Topping", entityId: id, employeeId: session.sub },
+  });
+
+  revalidatePath("/admin/toppings");
+  redirect("/admin/toppings?archived=1");
 }

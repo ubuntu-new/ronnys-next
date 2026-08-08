@@ -7,20 +7,16 @@ export const dynamic = "force-dynamic";
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; cat?: string }>;
+  searchParams: Promise<{ saved?: string; archived?: string; cat?: string }>;
 }) {
   const sp = await searchParams;
 
-  const categories = await db.category.findMany({ orderBy: { sortOrder: "asc" } });
+  const categories = await db.category.findMany({ where: { deletedAt: null }, orderBy: { sortOrder: "asc" } });
 
   const products = await db.product.findMany({
-    where: sp.cat ? { categoryId: sp.cat } : undefined,
+    where: { deletedAt: null, ...(sp.cat ? { categoryId: sp.cat } : {}) },
     orderBy: [{ categoryId: "asc" }, { sortOrder: "asc" }],
-    include: {
-      category: true,
-      sizes: { orderBy: { sortOrder: "asc" } },
-      promo: true,
-    },
+    include: { category: true, sizes: { orderBy: { sortOrder: "asc" } }, promo: true },
   });
 
   return (
@@ -30,12 +26,15 @@ export default async function ProductsPage({
           <h1>პროდუქტები</h1>
           <p>{products.length} ჩანაწერი</p>
         </div>
+        <Link className="btn" href="/admin/products/new">
+          + ახალი პროდუქტი
+        </Link>
       </div>
 
       {sp.saved && <div className="alert alert-ok">შენახულია.</div>}
+      {sp.archived && <div className="alert alert-ok">არქივში გადავიდა. დაბრუნება — „არქივი“ გვერდიდან.</div>}
 
       <div className="admin-panel">
-        <h2>ფილტრი</h2>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link className={sp.cat ? "btn btn-ghost" : "btn"} href="/admin/products">
             ყველა

@@ -8,17 +8,19 @@ export const dynamic = "force-dynamic";
 export default async function Dashboard() {
   const session = await getSession();
 
-  const [products, inactive, promos, toppings, combos, branches, orders] = await Promise.all([
-    db.product.count(),
-    db.product.count({ where: { active: false } }),
+  const [products, inactive, promos, toppings, combos, branches, orders, archived] = await Promise.all([
+    db.product.count({ where: { deletedAt: null } }),
+    db.product.count({ where: { deletedAt: null, active: false } }),
     db.productPromo.count({ where: { active: true } }),
-    db.topping.count({ where: { active: true } }),
-    db.combo.count({ where: { active: true } }),
-    db.branch.count({ where: { active: true } }),
+    db.topping.count({ where: { deletedAt: null, active: true } }),
+    db.combo.count({ where: { deletedAt: null, active: true } }),
+    db.branch.count({ where: { deletedAt: null, active: true } }),
     db.order.count(),
+    db.product.count({ where: { deletedAt: { not: null } } }),
   ]);
 
   const recent = await db.product.findMany({
+    where: { deletedAt: null },
     orderBy: { updatedAt: "desc" },
     take: 6,
     select: { id: true, name: true, updatedAt: true, active: true },
@@ -57,6 +59,10 @@ export default async function Dashboard() {
         <div className="admin-stat">
           <b>{orders}</b>
           <span>შეკვეთა</span>
+        </div>
+        <div className="admin-stat">
+          <b>{archived}</b>
+          <span>არქივში</span>
         </div>
       </div>
 

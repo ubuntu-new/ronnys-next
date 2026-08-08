@@ -7,11 +7,12 @@ export const dynamic = "force-dynamic";
 export default async function CombosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; archived?: string }>;
 }) {
   const sp = await searchParams;
 
   const combos = await db.combo.findMany({
+    where: { deletedAt: null },
     orderBy: { sortOrder: "asc" },
     include: { slots: { include: { options: true } } },
   });
@@ -23,9 +24,13 @@ export default async function CombosPage({
           <h1>კომბოები</h1>
           <p>{combos.length} ჩანაწერი</p>
         </div>
+        <Link className="btn" href="/admin/combos/new">
+          + ახალი კომბო
+        </Link>
       </div>
 
       {sp.saved && <div className="alert alert-ok">შენახულია.</div>}
+      {sp.archived && <div className="alert alert-ok">არქივში გადავიდა. დაბრუნება — „არქივი“ გვერდიდან.</div>}
 
       <div className="admin-panel">
         <table className="admin-table">
@@ -81,8 +86,7 @@ export default async function CombosPage({
       <div className="admin-panel">
         <h2>შენიშვნა</h2>
         <p className="hint">
-          კომბოზე მომხმარებლის ფასდაკლება არასდროს ვრცელდება — ეს დამტკიცებული წესია და
-          კოდშივეა ჩაშენებული.
+          კომბოზე მომხმარებლის ფასდაკლება არასდროს ვრცელდება — ეს დამტკიცებული წესია.
         </p>
       </div>
     </>

@@ -7,11 +7,12 @@ export const dynamic = "force-dynamic";
 export default async function BranchesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; archived?: string }>;
 }) {
   const sp = await searchParams;
 
   const branches = await db.branch.findMany({
+    where: { deletedAt: null },
     orderBy: { sortOrder: "asc" },
     include: { terminals: true },
   });
@@ -26,9 +27,13 @@ export default async function BranchesPage({
             {branches.reduce((n, b) => n + b.terminals.length, 0)} POS ტერმინალი
           </p>
         </div>
+        <Link className="btn" href="/admin/branches/new">
+          + ახალი ფილიალი
+        </Link>
       </div>
 
       {sp.saved && <div className="alert alert-ok">შენახულია.</div>}
+      {sp.archived && <div className="alert alert-ok">არქივში გადავიდა. დაბრუნება — „არქივი“ გვერდიდან.</div>}
 
       <div className="admin-panel">
         <table className="admin-table">
@@ -67,14 +72,6 @@ export default async function BranchesPage({
             ))}
           </tbody>
         </table>
-      </div>
-
-      <div className="admin-panel">
-        <h2>შენიშვნა</h2>
-        <p className="hint">
-          ფილიალის კოდი (მაგ. <code>TBS-01</code>) ყველა შეკვეთასა და ცვლაში ინახება — მისი
-          შეცვლა ძველ ჩანაწერებს არ ცვლის, მაგრამ ახალ POS ID-ებზე აისახება.
-        </p>
       </div>
     </>
   );

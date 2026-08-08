@@ -14,14 +14,15 @@ const NAV = [
   { href: "/admin/products", label: "პროდუქტები" },
   { href: "/admin/toppings", label: "ტოპინგები" },
   { href: "/admin/combos", label: "კომბოები" },
+  { href: "/admin/categories", label: "კატეგორიები" },
   { href: "/admin/branches", label: "ფილიალები" },
   { href: "/admin/settings", label: "პარამეტრები" },
+  { href: "/admin/archive", label: "არქივი" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
 
-  // login გვერდს საკუთარი layout აქვს — აქ shell არ ვახვევთ
   if (!session) {
     return (
       <html lang="ka">

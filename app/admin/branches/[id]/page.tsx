@@ -2,9 +2,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { i18nOf } from "@/lib/admin-utils";
-import { updateBranch, addTerminal } from "../actions";
+import { updateBranch, addTerminal, archiveBranch } from "../actions";
+import ArchiveButton from "../../_components/ArchiveButton";
 
 export const dynamic = "force-dynamic";
+
+const inp: React.CSSProperties = {
+  width: "100%",
+  padding: "6px 8px",
+  border: "1px solid var(--a-line)",
+  borderRadius: 6,
+  font: "inherit",
+};
 
 function hoursOf(v: unknown): { en: string; ka: string } {
   if (v && typeof v === "object" && "display" in (v as Record<string, unknown>)) {
@@ -18,7 +27,7 @@ export default async function BranchEdit({ params }: { params: Promise<{ id: str
 
   const b = await db.branch.findUnique({
     where: { id },
-    include: { terminals: { orderBy: { posId: "asc" } } },
+    include: { terminals: { orderBy: { posId: "asc" } }, _count: { select: { orders: true } } },
   });
   if (!b) notFound();
 
@@ -28,6 +37,16 @@ export default async function BranchEdit({ params }: { params: Promise<{ id: str
 
   const save = updateBranch.bind(null, id);
   const addPos = addTerminal.bind(null, id);
+  const archive = archiveBranch.bind(null, id);
+
+  const consequences = [
+    "საიტის ფილიალების სიიდან და შეკვეთის ფორმიდან გაქრება.",
+    b._count.orders > 0
+      ? `${b._count.orders} შეკვეთა რჩება ბაზაში და რეპორტებში — ისტორია არ ზარალდება.`
+      : "შეკვეთები არ აქვს.",
+    `${b.terminals.length} POS ტერმინალი შენარჩუნდება — POS ID-ები ისტორიისთვის საჭიროა.`,
+    "თანამშრომლების მიბმა და ცვლების ჩანაწერები რჩება.",
+  ];
 
   return (
     <>
@@ -35,7 +54,7 @@ export default async function BranchEdit({ params }: { params: Promise<{ id: str
         <div>
           <h1>{name.ka || name.en}</h1>
           <p>
-            <code>{b.code}</code> · {b.terminals.length} POS
+            <code>{b.code}</code> · {b.terminals.length} POS · {b._count.orders} შეკვეთა
           </p>
         </div>
         <Link className="btn btn-ghost" href="/admin/branches">
@@ -43,7 +62,7 @@ export default async function BranchEdit({ params }: { params: Promise<{ id: str
         </Link>
       </div>
 
-      <form className="admin-form" action={save} style={{ maxWidth: 860 }}>
+      <form className="admin-form" action={save} style={{ maxWidth: 900 }}>
         <div className="admin-panel">
           <h2>ძირითადი</h2>
 
@@ -125,8 +144,9 @@ export default async function BranchEdit({ params }: { params: Promise<{ id: str
                 <th>POS ID</th>
                 <th>ლეიბლი (EN)</th>
                 <th>ლეიბლი (KA)</th>
-                <th style={{ width: 90 }}>აქტიური</th>
-                <th style={{ width: 110 }}>ბარათი</th>
+                <th style={{ width: 80 }}>აქტიური</th>
+                <th style={{ width: 80 }}>ბარათი</th>
+                <th style={{ width: 70 }}>წაშლა</th>
               </tr>
             </thead>
             <tbody>
@@ -139,20 +159,10 @@ export default async function BranchEdit({ params }: { params: Promise<{ id: str
                       <input type="hidden" name={`term_${t.id}_present`} value="1" />
                     </td>
                     <td>
-                      <input
-                        name={`term_${t.id}_label_en`}
-                        type="text"
-                        defaultValue={l.en}
-                        style={{ width: "100%", padding: "6px 8px", border: "1px solid var(--a-line)", borderRadius: 6, font: "inherit" }}
-                      />
+                      <input name={`term_${t.id}_label_en`} type="text" defaultValue={l.en} style={inp} />
                     </td>
                     <td>
-                      <input
-                        name={`term_${t.id}_label_ka`}
-                        type="text"
-                        defaultValue={l.ka}
-                        style={{ width: "100%", padding: "6px 8px", border: "1px solid var(--a-line)", borderRadius: 6, font: "inherit" }}
-                      />
+                      <input name={`term_${t.id}_label_ka`} type="text" defaultValue={l.ka} style={inp} />
                     </td>
                     <td>
                       <input type="checkbox" name={`term_${t.id}_active`} defaultChecked={t.active} />
@@ -160,13 +170,17 @@ export default async function BranchEdit({ params }: { params: Promise<{ id: str
                     <td>
                       <input type="checkbox" name={`term_${t.id}_card`} defaultChecked={t.hasCardTerminal} />
                     </td>
+                    <td>
+                      <input type="checkbox" name={`term_${t.id}_del`} />
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
           <p className="hint" style={{ marginTop: 12 }}>
-            POS ID ავტომატურად იქმნება ფილიალის კოდიდან და აღარ იცვლება — ის შეკვეთებში ინახება.
+            POS ID ფილიალის კოდიდან იქმნება და აღარ იცვლება — ის შეკვეთებში ინახება.
+            ტერმინალის „წაშლა“ მას მხოლოდ დეაქტივირებს — POS ID ისტორიისთვის რჩება.
           </p>
         </div>
 
@@ -185,6 +199,15 @@ export default async function BranchEdit({ params }: { params: Promise<{ id: str
           + POS ტერმინალის დამატება
         </button>
       </form>
+
+      <div className="admin-panel" style={{ maxWidth: 900, marginTop: 20 }}>
+        <h2>არქივი</h2>
+        <p className="hint" style={{ marginBottom: 12 }}>
+          დროებით დახურვისთვის (რემონტი, დასვენება) გამოიყენე <b>„ღიაა“</b> გადამრთველი.
+          არქივი — როცა ფილიალი აღარ მუშაობს.
+        </p>
+        <ArchiveButton action={archive} subject={name.ka || name.en} consequences={consequences} />
+      </div>
     </>
   );
 }

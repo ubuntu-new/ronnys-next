@@ -159,7 +159,11 @@ model Branch {
   shifts    Shift[]
   orders    Order[]
 
+  // არქივი: არაფერი იშლება ფიზიკურად — deletedAt ივსება და სიებიდან ქრება
+  deletedAt DateTime?
+
   @@index([orgId, active, sortOrder])
+  @@index([deletedAt])
 }
 
 model Terminal {
@@ -209,7 +213,11 @@ model Category {
   products      Product[]
   discountRules DiscountRule[]
 
+  // არქივი: არაფერი იშლება ფიზიკურად — deletedAt ივსება და სიებიდან ქრება
+  deletedAt DateTime?
+
   @@index([active, sortOrder])
+  @@index([deletedAt])
 }
 
 model Subcategory {
@@ -223,7 +231,11 @@ model Subcategory {
   products      Product[]
   discountRules DiscountRule[]
 
+  // არქივი: არაფერი იშლება ფიზიკურად — deletedAt ივსება და სიებიდან ქრება
+  deletedAt DateTime?
+
   @@index([categoryId, active, sortOrder])
+  @@index([deletedAt])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -269,7 +281,11 @@ model Product {
   orderItems    OrderItem[]
 
   @@index([categoryId, active, sortOrder])
+  // არქივი: არაფერი იშლება ფიზიკურად — deletedAt ივსება და სიებიდან ქრება
+  deletedAt DateTime?
+
   @@index([type, active])
+  @@index([deletedAt])
 }
 
 model ProductSize {
@@ -311,7 +327,11 @@ model Topping {
   prices   ToppingPrice[]
   products ProductTopping[]
 
+  // არქივი: არაფერი იშლება ფიზიკურად — deletedAt ივსება და სიებიდან ქრება
+  deletedAt DateTime?
+
   @@index([active, sortOrder])
+  @@index([deletedAt])
 }
 
 model ToppingPrice {
@@ -364,7 +384,11 @@ model Combo {
 
   slots ComboSlot[]
 
+  // არქივი: არაფერი იშლება ფიზიკურად — deletedAt ივსება და სიებიდან ქრება
+  deletedAt DateTime?
+
   @@index([active, sortOrder])
+  @@index([deletedAt])
 }
 
 model ComboSlot {

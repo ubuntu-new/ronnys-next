@@ -6,6 +6,44 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/admin-auth";
 import { fdBool, fdNum, fdStr } from "@/lib/admin-utils";
 
+export async function createCombo(fd: FormData) {
+  const session = await requirePermission("can_edit_menu");
+  const nameEn = fdStr(fd, "name_en");
+  if (!nameEn) throw new Error("ინგლისური სახელი სავალდებულოა");
+
+  const c = await db.combo.create({
+    data: {
+      name: { en: nameEn, ka: fdStr(fd, "name_ka") || nameEn },
+      description: { en: "", ka: "" },
+      pricingMode: fdStr(fd, "pricingMode") === "discount" ? "discount" : "fixed",
+      price: fdNum(fd, "price"),
+      percent: fdNum(fd, "percent"),
+      discountable: false,
+      active: false,
+      sortOrder: 999,
+    },
+  });
+
+  const slots = fdNum(fd, "slots") ?? 2;
+  for (let i = 0; i < slots; i++) {
+    await db.comboSlot.create({
+      data: {
+        comboId: c.id,
+        label: { en: `Slot ${i + 1}`, ka: `სლოტი ${i + 1}` },
+        mode: "choice",
+        sortOrder: i,
+      },
+    });
+  }
+
+  await db.auditLog.create({
+    data: { action: "combo.create", entityType: "Combo", entityId: c.id, employeeId: session.sub },
+  });
+
+  revalidatePath("/admin/combos");
+  redirect(`/admin/combos/${c.id}`);
+}
+
 export async function updateCombo(id: string, fd: FormData) {
   const session = await requirePermission("can_edit_menu");
 
@@ -23,6 +61,12 @@ export async function updateCombo(id: string, fd: FormData) {
   const validFrom = fdStr(fd, "validFrom");
   const validTo = fdStr(fd, "validTo");
 
+  const allBranches = await db.branch.findMany({ where: { deletedAt: null }, select: { id: true } });
+  const availableIn = fd.getAll("availableIn").map(String);
+  const disabledBranches = fd.get("branches_present")
+    ? allBranches.map((b) => b.id).filter((bid) => !availableIn.includes(bid))
+    : undefined;
+
   await db.combo.update({
     where: { id },
     data: {
@@ -37,13 +81,18 @@ export async function updateCombo(id: string, fd: FormData) {
       sortOrder: fdNum(fd, "sortOrder") ?? 0,
       validFrom: validFrom ? new Date(validFrom) : null,
       validTo: validTo ? new Date(validTo) : null,
+      ...(disabledBranches ? { disabledBranches } : {}),
     },
   });
 
-  // ── სლოტები: ლეიბლი, რეჟიმი და არჩეული პროდუქტები ──
   const slots = await db.comboSlot.findMany({ where: { comboId: id } });
 
   for (const s of slots) {
+    if (fd.get(`slot_${s.id}_del`) !== null) {
+      await db.comboSlot.delete({ where: { id: s.id } });
+      continue;
+    }
+
     const labelEn = fdStr(fd, `slot_${s.id}_label_en`);
     if (labelEn) {
       await db.comboSlot.update({
@@ -51,13 +100,13 @@ export async function updateCombo(id: string, fd: FormData) {
         data: {
           label: { en: labelEn, ka: fdStr(fd, `slot_${s.id}_label_ka`) || labelEn },
           mode: fdStr(fd, `slot_${s.id}_mode`) === "fixed" ? "fixed" : "choice",
+          sortOrder: fdNum(fd, `slot_${s.id}_order`) ?? 0,
         },
       });
     }
 
-    // ამ სლოტისთვის მონიშნული პროდუქტები
-    const picked = fd.getAll(`slot_${s.id}_opt`).map(String);
     if (fd.get(`slot_${s.id}_present`) !== null) {
+      const picked = fd.getAll(`slot_${s.id}_opt`).map(String);
       await db.comboSlotOption.deleteMany({
         where: { slotId: s.id, productId: { notIn: picked.length ? picked : ["__none__"] } },
       });
@@ -79,8 +128,27 @@ export async function updateCombo(id: string, fd: FormData) {
   redirect("/admin/combos?saved=1");
 }
 
-export async function toggleCombo(id: string, active: boolean) {
+export async function addComboSlot(comboId: string) {
   await requirePermission("can_edit_menu");
-  await db.combo.update({ where: { id }, data: { active } });
+  const n = await db.comboSlot.count({ where: { comboId } });
+  await db.comboSlot.create({
+    data: {
+      comboId,
+      label: { en: `Slot ${n + 1}`, ka: `სლოტი ${n + 1}` },
+      mode: "choice",
+      sortOrder: n,
+    },
+  });
+  revalidatePath(`/admin/combos/${comboId}`);
+}
+
+/** არქივში გადატანა — ფიზიკურად არაფერი იშლება. */
+export async function archiveCombo(id: string) {
+  const session = await requirePermission("can_edit_menu");
+  await db.combo.update({ where: { id }, data: { deletedAt: new Date() } });
+  await db.auditLog.create({
+    data: { action: "combo.archive", entityType: "Combo", entityId: id, employeeId: session.sub },
+  });
   revalidatePath("/admin/combos");
+  redirect("/admin/combos?archived=1");
 }

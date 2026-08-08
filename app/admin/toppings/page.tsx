@@ -8,16 +8,19 @@ export const dynamic = "force-dynamic";
 export default async function ToppingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; archived?: string }>;
 }) {
   const sp = await searchParams;
 
   const toppings = await db.topping.findMany({
+    where: { deletedAt: null },
     orderBy: { sortOrder: "asc" },
     include: { prices: { orderBy: { sizeKey: "asc" } } },
   });
 
-  const sizeKeys = ["S", "M", "XL"];
+  const sizeKeys = Array.from(
+    new Set(toppings.flatMap((t) => t.prices.map((p) => p.sizeKey))),
+  ).sort();
 
   return (
     <>
@@ -26,15 +29,19 @@ export default async function ToppingsPage({
           <h1>ტოპინგები</h1>
           <p>{toppings.length} ჩანაწერი · ფასები ზომების მიხედვით</p>
         </div>
+        <Link className="btn" href="/admin/toppings/new">
+          + ახალი ტოპინგი
+        </Link>
       </div>
 
       {sp.saved && <div className="alert alert-ok">შენახულია.</div>}
+      {sp.archived && <div className="alert alert-ok">არქივში გადავიდა. დაბრუნება — „არქივი“ გვერდიდან.</div>}
 
       <form action={saveToppingPrices}>
         <div className="admin-panel">
           <h2>ფასები და სტატუსი</h2>
           <p className="hint" style={{ marginTop: -8, marginBottom: 14 }}>
-            ცვლილებები ერთდროულად ინახება. სახელის/ფოტოს შესაცვლელად დააჭირე დასახელებას.
+            ცვლილებები ერთდროულად ინახება. ფოტოსა და სახელის შესაცვლელად დააჭირე დასახელებას.
           </p>
 
           <table className="admin-table">
