@@ -131,8 +131,11 @@ export default function MenuBody() {
       </div>
       <div className="hh-grid">
         {HH_COMBOS.map((c) => {
-          const L = PIZZAS.find((p) => p.id === c.leftId)!;
-          const R = PIZZAS.find((p) => p.id === c.rightId)!;
+          const L = PIZZAS.find((p) => p.id === c.leftId);
+          const R = PIZZAS.find((p) => p.id === c.rightId);
+          // პრესეტის პიცა შეიძლება აღარ იყოს მენიუში (გამორთული / არქივში /
+          // ამ ფილიალში მიუწვდომელი) — მაშინ ბარათს საერთოდ არ ვხატავთ.
+          if (!L || !R) return null;
           const price = (L.sizes[1] / 2 + R.sizes[1] / 2).toFixed(2);
           const lIngs = L.ings.slice(0, 6).map((n) => ingLabel(n, lang)).join(", ");
           const rIngs = R.ings.slice(0, 6).map((n) => ingLabel(n, lang)).join(", ");
