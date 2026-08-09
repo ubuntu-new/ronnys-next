@@ -1,8 +1,14 @@
 // prisma/seed.ts
-// მენიუს seed — წყარო: lib/data.ts (არაფერი ხელახლა აკრეფილი).
-// იდემპოტენტურია: ყველა ჩანაწერს დეტერმინისტული id აქვს და upsert-ით იწერება.
+// მენიუს seed — წყარო: lib/data.ts
 //
-// გაშვება:  npx tsx prisma/seed.ts
+// ⚠️ მთავარი წესი: **admin-ის ცვლილებას არ ეხება.**
+//   • ჩანაწერი არ არსებობს → იქმნება
+//   • ჩანაწერი არსებობს    → ივსება მხოლოდ ცარიელი ველები
+//   • ფასი/ფოტო/სახელი, რომელიც admin-ში შეიცვალა → ხელუხლებელი
+//
+// გაშვება:
+//   npx tsx prisma/seed.ts          ← უსაფრთხო
+//   npx tsx prisma/seed.ts --force  ← ყველაფრის დაბრუნება lib/data.ts-იდან
 
 import { PrismaClient } from "@prisma/client";
 import {
@@ -23,6 +29,47 @@ import {
 } from "../lib/data";
 
 const db = new PrismaClient();
+const FORCE = process.argv.includes("--force");
+
+let created = 0;
+let filled = 0;
+let kept = 0;
+
+/** მხოლოდ ცარიელი ველები — არსებულს არ ვეხებით. */
+function backfill(existing: Record<string, unknown>, desired: Record<string, unknown>) {
+  const patch: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(desired)) {
+    if (v === null || v === undefined || v === "") continue;
+    const cur = existing[k];
+    const empty =
+      cur === null || cur === undefined || cur === "" || (Array.isArray(cur) && cur.length === 0);
+    if (empty) patch[k] = v;
+  }
+  return patch;
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/** create → backfill → (FORCE ? overwrite : skip) */
+async function put(model: any, where: any, data: Record<string, unknown>) {
+  const existing = await model.findUnique({ where });
+  if (!existing) {
+    await model.create({ data: { ...where, ...data } });
+    created++;
+    return;
+  }
+  if (FORCE) {
+    await model.update({ where, data });
+    filled++;
+    return;
+  }
+  const patch = backfill(existing, data);
+  if (!Object.keys(patch).length) {
+    kept++;
+    return;
+  }
+  await model.update({ where, data: patch });
+  filled++;
+}
 
 const ORG_ID = "ronnys";
 const SIZE_KEYS = ["S", "M", "XL"] as const;
@@ -38,13 +85,14 @@ const i18n = (en: string, ka?: string | null) => ({ en, ka: ka || en });
 const popularSet = new Set(POPULAR);
 
 async function main() {
+  console.log(
+    FORCE
+      ? "⚠️  FORCE — ყველაფერი lib/data.ts-იდან გადაიწერება\n"
+      : "უსაფრთხო რეჟიმი — admin-ის ცვლილებებს არ ვეხები\n",
+  );
+
   // ── 1) ორგანიზაცია ──────────────────────────────────────────
-  await db.organization.upsert({
-    where: { id: ORG_ID },
-    update: { name: i18n("Ronny's Pizza"), active: true },
-    create: { id: ORG_ID, name: i18n("Ronny's Pizza"), active: true },
-  });
-  console.log("✓ organization");
+  await put(db.organization, { id: ORG_ID }, { name: i18n("Ronny's Pizza"), active: true });
 
   // ── 2) ბრანჩები + POS ტერმინალები ───────────────────────────
   for (const [i, loc] of LOCATIONS.entries()) {
@@ -60,15 +108,18 @@ async function main() {
       active: true,
       sortOrder: i,
     };
-    await db.branch.upsert({ where: { id: branchId }, update: data, create: { id: branchId, ...data } });
+    await put(db.branch, { id: branchId }, data);
 
     for (const n of [1, 2]) {
       const posId = `${code}-POS-${n}`;
-      const t = { branchId, posId, label: i18n(`POS ${n}`), active: true, hasCardTerminal: true };
-      await db.terminal.upsert({ where: { posId }, update: t, create: t });
+      await put(db.terminal, { posId }, {
+        branchId,
+        label: i18n(`POS ${n}`),
+        active: true,
+        hasCardTerminal: true,
+      });
     }
   }
-  console.log(`✓ ${LOCATIONS.length} branches (2 POS each)`);
 
   // ── 3) settings — key/value ─────────────────────────────────
   const settings: Record<string, unknown> = {
@@ -92,13 +143,15 @@ async function main() {
     ],
   };
   for (const [key, value] of Object.entries(settings)) {
-    await db.setting.upsert({
-      where: { key },
-      update: { value: value as object, updatedBy: "seed" },
-      create: { key, value: value as object, updatedBy: "seed" },
-    });
+    const exists = await db.setting.findUnique({ where: { key } });
+    if (!exists) {
+      await db.setting.create({ data: { key, value: value as object, updatedBy: "seed" } });
+      created++;
+    } else if (FORCE) {
+      await db.setting.update({ where: { key }, data: { value: value as object, updatedBy: "seed" } });
+      filled++;
+    } else kept++;
   }
-  console.log(`✓ ${Object.keys(settings).length} settings`);
 
   // ── 4) კატეგორიები ──────────────────────────────────────────
   const categories = [
@@ -109,13 +162,8 @@ async function main() {
   ];
   for (const c of categories) {
     const { id, ...rest } = c;
-    await db.category.upsert({
-      where: { id },
-      update: { ...rest, type: "food", active: true },
-      create: { id, ...rest, type: "food", active: true },
-    });
+    await put(db.category, { id }, { ...rest, type: "food", active: true });
   }
-  console.log(`✓ ${categories.length} categories`);
 
   // ── 5) ტოპინგები + ფასები ზომებზე ───────────────────────────
   for (const [i, t] of TOPPINGS.entries()) {
@@ -131,17 +179,16 @@ async function main() {
       active: true,
       sortOrder: i,
     };
-    await db.topping.upsert({ where: { id }, update: data, create: { id, ...data } });
+    await put(db.topping, { id }, data);
 
     for (const [si, key] of SIZE_KEYS.entries()) {
-      await db.toppingPrice.upsert({
-        where: { toppingId_sizeKey: { toppingId: id, sizeKey: key } },
-        update: { price: t.ps[si] },
-        create: { toppingId: id, sizeKey: key, price: t.ps[si] },
+      await put(db.toppingPrice, { toppingId_sizeKey: { toppingId: id, sizeKey: key } }, {
+        toppingId: id,
+        sizeKey: key,
+        price: t.ps[si],
       });
     }
   }
-  console.log(`✓ ${TOPPINGS.length} toppings (× 3 sizes)`);
 
   // ── 6) პიცები ───────────────────────────────────────────────
   for (const p of PIZZAS) {
@@ -162,31 +209,32 @@ async function main() {
       active: true,
       sortOrder: p.id,
     };
-    await db.product.upsert({ where: { id }, update: data, create: { id, ...data } });
+    await put(db.product, { id }, data);
 
     for (const [si, key] of SIZE_KEYS.entries()) {
-      await db.productSize.upsert({
-        where: { productId_key: { productId: id, key } },
-        update: { cm: SIZE_CM[si], price: p.sizes[si], sortOrder: si },
-        create: { productId: id, key, cm: SIZE_CM[si], price: p.sizes[si], sortOrder: si },
+      await put(db.productSize, { productId_key: { productId: id, key } }, {
+        productId: id,
+        key,
+        cm: SIZE_CM[si],
+        price: p.sizes[si],
+        sortOrder: si,
       });
     }
 
-    for (const [ii, ing] of (p.ings ?? []).entries()) {
-      const tid = toppingId(ing);
-      const exists = await db.topping.findUnique({ where: { id: tid } });
-      if (!exists) {
-        console.warn(`  ⚠ ტოპინგი ვერ მოიძებნა: "${ing}" (${p.name})`);
-        continue;
+    // რეცეპტი — მხოლოდ თუ საერთოდ ცარიელია (admin-ის ინგრედიენტებს არ ვშლით)
+    const hasIngs = await db.productTopping.count({ where: { productId: id } });
+    if (hasIngs === 0) {
+      for (const [ii, ing] of (p.ings ?? []).entries()) {
+        const tid = toppingId(ing);
+        if (!(await db.topping.findUnique({ where: { id: tid } }))) {
+          console.warn(`  ⚠ ტოპინგი ვერ მოიძებნა: "${ing}" (${p.name})`);
+          continue;
+        }
+        await db.productTopping.create({ data: { productId: id, toppingId: tid, sortOrder: ii } });
+        created++;
       }
-      await db.productTopping.upsert({
-        where: { productId_toppingId: { productId: id, toppingId: tid } },
-        update: { sortOrder: ii },
-        create: { productId: id, toppingId: tid, sortOrder: ii },
-      });
     }
   }
-  console.log(`✓ ${PIZZAS.length} pizzas`);
 
   // ── 7) sides / sauces / drinks ──────────────────────────────
   const simple = [
@@ -211,11 +259,10 @@ async function main() {
         active: true,
         sortOrder: i,
       };
-      await db.product.upsert({ where: { id }, update: data, create: { id, ...data } });
+      await put(db.product, { id }, data);
       simpleCount++;
     }
   }
-  console.log(`✓ ${simpleCount} sides / sauces / drinks`);
 
   // ── 8) კომბოები ─────────────────────────────────────────────
   for (const [ci, c] of COMBOS.entries()) {
@@ -231,29 +278,32 @@ async function main() {
       active: c.active !== false,
       sortOrder: ci,
     };
-    await db.combo.upsert({ where: { id: c.id }, update: data, create: { id: c.id, ...data } });
+    await put(db.combo, { id: c.id }, data);
 
     for (const [si, s] of c.slots.entries()) {
       const slotId = `${c.id}-slot-${si}`;
-      const sd = { comboId: c.id, label: i18n(s.label, s.label_ka), mode: s.mode, sortOrder: si };
-      await db.comboSlot.upsert({ where: { id: slotId }, update: sd, create: { id: slotId, ...sd } });
+      await put(db.comboSlot, { id: slotId }, {
+        comboId: c.id,
+        label: i18n(s.label, s.label_ka),
+        mode: s.mode,
+        sortOrder: si,
+      });
 
-      for (const ref of s.options) {
-        const productId = refToId(ref);
-        const exists = await db.product.findUnique({ where: { id: productId } });
-        if (!exists) {
-          console.warn(`  ⚠ combo ref ვერ მოიძებნა: "${ref}" (${c.name})`);
-          continue;
+      // სლოტის ვარიანტები — მხოლოდ თუ ცარიელია
+      const hasOpts = await db.comboSlotOption.count({ where: { slotId } });
+      if (hasOpts === 0) {
+        for (const ref of s.options) {
+          const productId = refToId(ref);
+          if (!(await db.product.findUnique({ where: { id: productId } }))) {
+            console.warn(`  ⚠ combo ref ვერ მოიძებნა: "${ref}" (${c.name})`);
+            continue;
+          }
+          await db.comboSlotOption.create({ data: { slotId, productId } });
+          created++;
         }
-        await db.comboSlotOption.upsert({
-          where: { slotId_productId: { slotId, productId } },
-          update: {},
-          create: { slotId, productId },
-        });
       }
     }
   }
-  console.log(`✓ ${COMBOS.length} combos`);
 
   // ── 9) შეჯამება ─────────────────────────────────────────────
   const [branches, cats, prods, tops, combos, sets] = await Promise.all([
@@ -264,7 +314,11 @@ async function main() {
     db.combo.count(),
     db.setting.count(),
   ]);
-  console.log("\n─────────── შედეგი ───────────");
+  console.log("\n─────────── seed ───────────");
+  console.log(`შეიქმნა     ${created}`);
+  console.log(`შეივსო      ${filled}`);
+  console.log(`ხელუხლებელი ${kept}`);
+  console.log("─────────── ბაზა ───────────");
   console.log(`branches   ${branches}`);
   console.log(`categories ${cats}`);
   console.log(`products   ${prods}`);
