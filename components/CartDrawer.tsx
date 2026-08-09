@@ -5,6 +5,7 @@ import { useCart, type CartLine, type PizzaLine, type SimpleLine } from "@/lib/c
 import { useLang } from "@/lib/i18n";
 import {
   PIZZAS,
+  PIZZA_PHOTOS,
   EXTRAS,
   SAUCES,
   DRINKS,

@@ -9,9 +9,9 @@ import {
   setPin,
   clearPin,
   archiveEmployee,
-  PERMISSIONS,
 } from "../actions";
 import ArchiveButton from "../../_components/ArchiveButton";
+import { PERMISSIONS } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 

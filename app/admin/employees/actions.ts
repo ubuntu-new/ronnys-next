@@ -7,19 +7,12 @@ import { db } from "@/lib/db";
 import { requirePermission, getSession } from "@/lib/admin-auth";
 import { hashPin, isValidPin } from "@/lib/pin";
 import { fdBool, fdNum, fdStr } from "@/lib/admin-utils";
+import { PERMISSIONS } from "@/lib/permissions";
+void PERMISSIONS;
 
 const ROLES = ["super_admin", "branch_manager", "cashier", "kitchen", "driver"] as const;
 type Role = (typeof ROLES)[number];
 
-export const PERMISSIONS = [
-  { id: "can_edit_menu", label: "მენიუს რედაქტირება" },
-  { id: "can_discount", label: "ფასდაკლებები და ლოიალობა" },
-  { id: "can_refund", label: "თანხის დაბრუნება" },
-  { id: "can_void", label: "შეკვეთის გაუქმება" },
-  { id: "can_manage_staff", label: "თანამშრომლების მართვა" },
-  { id: "can_view_reports", label: "რეპორტების ნახვა" },
-  { id: "can_transfer_branch", label: "ფილიალებს შორის გადატანა" },
-];
 
 function roleOf(v: string): Role {
   return (ROLES as readonly string[]).includes(v) ? (v as Role) : "cashier";

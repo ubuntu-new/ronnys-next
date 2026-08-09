@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { i18nText } from "@/lib/admin-utils";
-import { createEmployee, PERMISSIONS } from "../actions";
+import { createEmployee } from "../actions";
+import { PERMISSIONS } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
