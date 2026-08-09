@@ -67,12 +67,9 @@ export async function updateProductFull(id: string, fd: FormData) {
   const badgeEn = fdStr(fd, "badge_en");
   const subcategoryId = fdStr(fd, "subcategoryId");
 
-  // ფილიალები: მონიშნული = ხელმისაწვდომია → disabledBranches არის დანარჩენი
-  const allBranches = await db.branch.findMany({ select: { id: true } });
-  const availableIn = fd.getAll("availableIn").map(String);
-  const disabledBranches = fd.get("branches_present")
-    ? allBranches.map((b) => b.id).filter((bid) => !availableIn.includes(bid))
-    : undefined;
+  // ფილიალები — ახლა BranchProduct-ში (მასივი აღარ გამოიყენება)
+  const allBranches = await db.branch.findMany({ where: { deletedAt: null }, select: { id: true } });
+  const availableIn = new Set(fd.getAll("availableIn").map(String));
 
   const gallery = fdStr(fd, "gallery")
     .split(/\r?\n/)
@@ -119,7 +116,6 @@ export async function updateProductFull(id: string, fd: FormData) {
       sortOrder: fdNum(fd, "sortOrder") ?? 0,
       active: fdBool(fd, "active"),
       discountable: fdBool(fd, "discountable"),
-      ...(disabledBranches ? { disabledBranches } : {}),
       updatedBy: session.sub,
     },
   });
@@ -157,6 +153,29 @@ export async function updateProductFull(id: string, fd: FormData) {
         sortOrder: sizes.length,
       },
     });
+  }
+
+  // ── ფილიალებში ხელმისაწვდომობა ──
+  if (fd.get("branches_present") !== null) {
+    for (const b of allBranches) {
+      const available = availableIn.has(b.id);
+      const existing = await db.branchProduct.findUnique({
+        where: { branchId_productId: { branchId: b.id, productId: id } },
+      });
+      if (!existing) {
+        if (available) continue; // ჩანაწერის არარსებობა = ხელმისაწვდომია
+        await db.branchProduct.create({
+          data: { branchId: b.id, productId: id, available: false, updatedBy: session.sub },
+        });
+        continue;
+      }
+      if (existing.available !== available) {
+        await db.branchProduct.update({
+          where: { id: existing.id },
+          data: { available, updatedBy: session.sub },
+        });
+      }
+    }
   }
 
   // ── ნაგულისხმევი ინგრედიენტები ──

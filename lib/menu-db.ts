@@ -33,7 +33,8 @@ function triple(rows: { key?: string; sizeKey?: string; price: unknown }[]): [nu
 }
 
 export async function getMenu(): Promise<MenuPayload> {
-  const [products, toppings, combos, branches, settings] = await Promise.all([
+  /* eslint-disable prefer-const */
+  let [products, toppings, combos, branches, settings] = await Promise.all([
     db.product.findMany({
       where: { deletedAt: null, active: true },
       orderBy: [{ sortOrder: "asc" }],
@@ -42,6 +43,7 @@ export async function getMenu(): Promise<MenuPayload> {
         sizes: { orderBy: { sortOrder: "asc" } },
         ingredients: { include: { topping: true }, orderBy: { sortOrder: "asc" } },
         promo: true,
+        branchProducts: true,
       },
     }),
     db.topping.findMany({
@@ -62,6 +64,16 @@ export async function getMenu(): Promise<MenuPayload> {
     db.branch.findMany({ where: { deletedAt: null, active: true }, orderBy: { sortOrder: "asc" } }),
     db.setting.findMany(),
   ]);
+
+  // ყველა აქტიურ ფილიალში გამორთული პროდუქტი საიტზე არ ჩანს.
+  // (ფილიალის მიხედვით ფილტრაცია მაშინ ჩაირთვება, როცა საიტს ფილიალის არჩევა დაემატება)
+  const branchCount = branches.length;
+  const soldSomewhere = (p: { branchProducts: { available: boolean }[] }) => {
+    if (branchCount === 0) return true;
+    const off = p.branchProducts.filter((bp) => !bp.available).length;
+    return off < branchCount;
+  };
+  products = products.filter(soldSomewhere);
 
   const set = Object.fromEntries(settings.map((s) => [s.key, s.value])) as Record<string, Json>;
   const order = (set.order && typeof set.order === "object" ? set.order : {}) as Record<string, unknown>;

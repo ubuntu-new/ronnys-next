@@ -38,6 +38,7 @@ export default async function ProductEdit({ params }: { params: Promise<{ id: st
         sizes: { orderBy: { sortOrder: "asc" } },
         promo: true,
         ingredients: true,
+        branchProducts: true,
       },
     }),
     db.category.findMany({ where: { deletedAt: null }, orderBy: { sortOrder: "asc" }, include: { subcategories: true } }),
@@ -56,7 +57,8 @@ export default async function ProductEdit({ params }: { params: Promise<{ id: st
   const badge = i18nOf(p.badge);
   const nut = nutritionOf(p.nutrition);
   const chosenIngs = new Set(p.ingredients.map((i) => i.toppingId));
-  const disabled = new Set(p.disabledBranches);
+  const disabled = new Set(p.branchProducts.filter((bp) => !bp.available).map((bp) => bp.branchId));
+  const goneEverywhere = branches.length > 0 && disabled.size >= branches.length;
   const promoSizes = new Set(p.promo?.sizes ?? []);
 
   const save = updateProductFull.bind(null, id);
@@ -311,6 +313,17 @@ export default async function ProductEdit({ params }: { params: Promise<{ id: st
         <div className="admin-panel">
           <h2>ხელმისაწვდომობა ფილიალებში</h2>
           <input type="hidden" name="branches_present" value="1" />
+          {goneEverywhere && (
+            <div className="alert alert-error">
+              <b>არცერთ ფილიალში არ იყიდება</b> — ეს პროდუქტი საიტზე საერთოდ არ ჩანს.
+            </div>
+          )}
+          {!goneEverywhere && disabled.size > 0 && (
+            <div className="alert" style={{ background: "#fdf3d6", color: "#8a6a12" }}>
+              გამორთულია {disabled.size} ფილიალში:{" "}
+              {branches.filter((b) => disabled.has(b.id)).map((b) => i18nText(b.name)).join(", ")}
+            </div>
+          )}
           <div style={grid}>
             {branches.map((b) => (
               <label key={b.id} style={cell}>
@@ -321,7 +334,9 @@ export default async function ProductEdit({ params }: { params: Promise<{ id: st
               </label>
             ))}
           </div>
-          <span className="hint">მოხსნილი = ამ ფილიალში არ იყიდება.</span>
+          <span className="hint">
+            მოხსნილი = ამ ფილიალში დროებით არ იყიდება. სამუდამოდ მოსაშორებლად „ჩართული“ გადამრთველია.
+          </span>
         </div>
 
         {/* ── კვებითი ღირებულება ── */}

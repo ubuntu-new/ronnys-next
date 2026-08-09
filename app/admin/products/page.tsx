@@ -12,11 +12,17 @@ export default async function ProductsPage({
   const sp = await searchParams;
 
   const categories = await db.category.findMany({ where: { deletedAt: null }, orderBy: { sortOrder: "asc" } });
+  const branchCount = await db.branch.count({ where: { deletedAt: null } });
 
   const products = await db.product.findMany({
     where: { deletedAt: null, ...(sp.cat ? { categoryId: sp.cat } : {}) },
     orderBy: [{ categoryId: "asc" }, { sortOrder: "asc" }],
-    include: { category: true, sizes: { orderBy: { sortOrder: "asc" } }, promo: true },
+    include: {
+      category: true,
+      sizes: { orderBy: { sortOrder: "asc" } },
+      promo: true,
+      branchProducts: true,
+    },
   });
 
   return (
@@ -98,6 +104,25 @@ export default async function ProductsPage({
                   <span className={p.active ? "badge badge-on" : "badge badge-off"}>
                     {p.active ? "ჩართული" : "გამორთული"}
                   </span>
+                  {(() => {
+                    const off = p.branchProducts.filter((bp) => !bp.available).length;
+                    if (off === 0) return null;
+                    const gone = branchCount > 0 && off >= branchCount;
+                    return (
+                      <div style={{ marginTop: 4 }}>
+                        <span
+                          className="badge"
+                          style={
+                            gone
+                              ? { background: "#fdecea", color: "var(--a-danger)" }
+                              : { background: "#fdf3d6", color: "#8a6a12" }
+                          }
+                        >
+                          {gone ? "არსად არ იყიდება" : `${off} ფილიალში გამორთული`}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </td>
               </tr>
             ))}
