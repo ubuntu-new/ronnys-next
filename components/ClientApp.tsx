@@ -1,8 +1,8 @@
 "use client";
-
+import { useState } from "react";
 import { LangProvider } from "@/lib/i18n";
 import { CartProvider } from "@/lib/cart";
-import type { Lang } from "@/lib/data";
+import { applyMenu, type Lang, type MenuPayload } from "@/lib/data";
 import AppViewport from "@/components/AppViewport";
 import Header from "@/components/Header";
 import TrustBar from "@/components/TrustBar";
@@ -17,7 +17,14 @@ import CartDrawer from "@/components/CartDrawer";
 import Checkout from "@/components/Checkout";
 import Toast from "@/components/Toast";
 
-export default function ClientApp({ lang }: { lang: Lang }) {
+export default function ClientApp({ lang, menu }: { lang: Lang; menu?: MenuPayload | null }) {
+  // ბრაუზერშიც უნდა შეივსოს — და შვილების რენდერამდე, სინქრონულად.
+  // useState-ის initializer ზუსტად ერთხელ გაეშვება, პირველი რენდერის დროს.
+  useState(() => {
+    applyMenu(menu);
+    return null;
+  });
+
   return (
     <LangProvider initialLang={lang}>
       <CartProvider>

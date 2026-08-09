@@ -162,6 +162,23 @@ export default async function ProductEdit({ params }: { params: Promise<{ id: st
 
           <div className="field-row">
             <div className="field">
+              <label htmlFor="emoji">ემოჯი</label>
+              <input id="emoji" name="emoji" type="text" defaultValue={p.emoji ?? ""} placeholder="🍕" />
+              <span className="hint">ჩანს მაშინ, როცა ფოტო ვერ ჩაიტვირთა.</span>
+            </div>
+            <div className="field">
+              <label htmlFor="builder">კონსტრუქტორი</label>
+              <select id="builder" name="builder" defaultValue={p.builder ?? ""}>
+                <option value="">—</option>
+                <option value="sticks">ჯოხები</option>
+                <option value="cinsticks">დარიჩინის ჯოხები</option>
+              </select>
+              <span className="hint">რომელი ფანჯარა გაიხსნას „არჩევა“-ზე.</span>
+            </div>
+          </div>
+
+          <div className="field-row">
+            <div className="field">
               <label htmlFor="badge_en">ბეიჯი (EN)</label>
               <input id="badge_en" name="badge_en" type="text" defaultValue={badge.en} />
             </div>
@@ -350,6 +367,10 @@ export default async function ProductEdit({ params }: { params: Promise<{ id: st
               <div className="field-check">
                 <input id="discountable" name="discountable" type="checkbox" defaultChecked={p.discountable} />
                 <label htmlFor="discountable">ფასდაკლება ვრცელდება</label>
+              </div>
+              <div className="field-check">
+                <input id="isBYO" name="isBYO" type="checkbox" defaultChecked={p.isBYO} />
+                <label htmlFor="isBYO">„ჩემი პიცა“ — ნულიდან აწყობა</label>
               </div>
             </div>
           </div>

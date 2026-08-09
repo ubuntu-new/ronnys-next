@@ -259,6 +259,12 @@ model Product {
   price    Decimal? @db.Decimal(10, 2)
   variants Json? // [ { name:{en,ka}, price } ]
 
+  // ── საიტის UI-სთვის საჭირო ველები (lib/data.ts-იდან) ──
+  legacyId Int?    @unique // ძველი რიცხვითი id (pizza:1) — HH_COMBOS/photos თავსებადობა
+  emoji    String?
+  builder  String? // "sticks" | "cinsticks" — რომელი კონსტრუქტორი გაიხსნას
+  isBYO    Boolean @default(false) // „ჩემი პიცა“ — ნულიდან აწყობა
+
   tier  String?
   badge Json?
 
@@ -316,9 +322,12 @@ model ProductPromo {
 }
 
 model Topping {
-  id         String  @id @default(cuid())
+  id         String   @id @default(cuid())
   name       Json
   category   String? // "meat" | "veg" | "cheese" | "sauce"
+  emoji      String?
+  dots       String[] @default([]) // UI-ს ფერადი ნიშნულები
+  popular    Boolean  @default(false) // კონსტრუქტორში ზემოთ ჩნდება
   photo      String?
   recipeOnly Boolean @default(false) // მხოლოდ რეცეპტში, დამატებით არ იყიდება
   active     Boolean @default(true)

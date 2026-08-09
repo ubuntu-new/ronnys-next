@@ -101,6 +101,9 @@ export async function updateProductFull(id: string, fd: FormData) {
       subcategoryId: subcategoryId || null,
       type: typeOf(fdStr(fd, "type")),
       photo: fdStr(fd, "photo") || null,
+      emoji: fdStr(fd, "emoji") || null,
+      builder: fdStr(fd, "builder") || null,
+      isBYO: fdBool(fd, "isBYO"),
       gallery,
       nutrition: hasNutrition
         ? {
@@ -201,6 +204,7 @@ export async function updateProductFull(id: string, fd: FormData) {
 
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${id}`);
+  revalidatePath("/", "layout"); // საიტის მენიუ მაშინვე განახლდეს
   redirect("/admin/products?saved=1");
 }
 
@@ -215,5 +219,6 @@ export async function archiveProduct(id: string) {
   });
 
   revalidatePath("/admin/products");
+  revalidatePath("/", "layout");
   redirect("/admin/products?archived=1");
 }

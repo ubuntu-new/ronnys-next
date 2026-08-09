@@ -79,6 +79,17 @@ export default async function ToppingEdit({ params }: { params: Promise<{ id: st
               <input id="sortOrder" name="sortOrder" type="number" defaultValue={t.sortOrder} />
             </div>
           </div>
+
+          <div className="field-row">
+            <div className="field">
+              <label htmlFor="emoji">ემოჯი</label>
+              <input id="emoji" name="emoji" type="text" defaultValue={t.emoji ?? ""} placeholder="🧀" />
+            </div>
+            <div className="field">
+              <label htmlFor="dots">ნიშნულები (მძიმით)</label>
+              <input id="dots" name="dots" type="text" defaultValue={t.dots.join(", ")} placeholder="cheese, veg" />
+            </div>
+          </div>
         </div>
 
         <div className="admin-panel">
@@ -122,6 +133,10 @@ export default async function ToppingEdit({ params }: { params: Promise<{ id: st
           <div className="field-check">
             <input id="recipeOnly" name="recipeOnly" type="checkbox" defaultChecked={t.recipeOnly} />
             <label htmlFor="recipeOnly">მხოლოდ რეცეპტში (დამატებით არ იყიდება)</label>
+          </div>
+          <div className="field-check">
+            <input id="popular" name="popular" type="checkbox" defaultChecked={t.popular} />
+            <label htmlFor="popular">პოპულარული (კონსტრუქტორში ზემოთ ჩნდება)</label>
           </div>
 
           {t.products.length > 0 && (

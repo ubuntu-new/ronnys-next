@@ -1,10 +1,27 @@
 import { notFound } from "next/navigation";
 import { isLocale } from "@/lib/locales";
 import ClientApp from "@/components/ClientApp";
-import type { Lang } from "@/lib/data";
+import { getMenu } from "@/lib/menu-db";
+import { applyMenu, type Lang } from "@/lib/data";
+
+// მენიუ ბაზიდან. `revalidate` აჩერებს ყოველ ვიზიტზე მოთხოვნას;
+// admin-ში შენახვისას revalidatePath("/") მაშინვე განაახლებს.
+export const revalidate = 60;
 
 export default async function Page({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params;
   if (!isLocale(lang)) notFound();
-  return <ClientApp lang={lang as Lang} />;
+
+  let menu = null;
+  try {
+    menu = await getMenu();
+  } catch (e) {
+    // ბაზა მიუწვდომელია → lib/data.ts-ის სტატიკური მენიუ რჩება ძალაში.
+    console.error("menu: ბაზიდან წამოღება ვერ მოხერხდა, ვიყენებ fallback-ს", e);
+  }
+
+  // SSR-ის დროსაც ვავსებთ, რომ სერვერზე დარენდერებული HTML სწორი იყოს
+  applyMenu(menu);
+
+  return <ClientApp lang={lang as Lang} menu={menu} />;
 }

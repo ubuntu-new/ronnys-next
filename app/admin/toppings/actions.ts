@@ -77,6 +77,9 @@ export async function updateTopping(id: string, fd: FormData) {
     data: {
       name: { en: nameEn, ka: fdStr(fd, "name_ka") || nameEn },
       category: fdStr(fd, "category") || null,
+      emoji: fdStr(fd, "emoji") || null,
+      dots: fdStr(fd, "dots").split(",").map((x) => x.trim()).filter(Boolean),
+      popular: fdBool(fd, "popular"),
       photo: fdStr(fd, "photo") || null,
       recipeOnly: fdBool(fd, "recipeOnly"),
       active: fdBool(fd, "active"),
@@ -118,5 +121,6 @@ export async function archiveTopping(id: string) {
   });
 
   revalidatePath("/admin/toppings");
+  revalidatePath("/", "layout");
   redirect("/admin/toppings?archived=1");
 }
