@@ -3,6 +3,9 @@
 // კალათაში პროდუქტის ფოტო — ახლა სამივე პოზიციაზე მხოლოდ SLICE_SVG იხატება.
 // SVG რჩება fallback-ად: თუ ფოტო არ არსებობს ან ვერ ჩაიტვირთა.
 //
+// ⚠️ თანმიმდევრობა მნიშვნელოვანია: ჯერ სამი ჩანაცვლება, მერე CartIcon-ის დამატება.
+// (CartIcon თვითონ იყენებს იმავე SLICE_SVG-ს fallback-ად და დათვლას აფუჭებს.)
+//
 // იდემპოტენტურია.
 
 import { readFileSync, writeFileSync, copyFileSync, existsSync } from "node:fs";
@@ -22,9 +25,24 @@ let s = readFileSync(F, "utf8");
 if (s.includes("function CartIcon")) {
   console.log("CartDrawer უკვე დაპატჩილია.");
 } else {
-  copyFileSync(F, F + ".bak");
+  // ── 1) სამი ხატულა — რიგითობით: hh, simple, pizza ──
+  const OLD = '<div className="ci-icon" dangerouslySetInnerHTML={{ __html: SLICE_SVG }} />';
+  const parts = s.split(OLD);
 
-  // ── 1) საჭირო იმპორტები ──
+  if (parts.length !== 4) {
+    console.error(`⚠ ველოდი 3 ხატულას, ვიპოვე ${parts.length - 1} — ხელით შეამოწმე.`);
+    process.exit(1);
+  }
+
+  const NEW = [
+    "<CartIcon photo={PIZZA_PHOTOS[l.leftId] || PIZZA_PHOTOS[l.rightId]} />", // ნახევარ-ნახევარი
+    "<CartIcon photo={simplePhoto(l)} />", // მარტივი
+    "<CartIcon photo={pizza ? PIZZA_PHOTOS[pizza.id] : undefined} />", // პიცა
+  ];
+
+  s = parts[0] + NEW[0] + parts[1] + NEW[1] + parts[2] + NEW[2] + parts[3];
+
+  // ── 2) იმპორტები ──
   if (!s.includes("PIZZA_PHOTOS")) {
     s = s.replace(/(\n\s*)PIZZAS,/, "$1PIZZAS,$1PIZZA_PHOTOS,");
     if (!s.includes("PIZZA_PHOTOS")) {
@@ -33,9 +51,12 @@ if (s.includes("function CartIcon")) {
     }
   }
 
-  // ── 2) დამხმარეები: ფოტოს პოვნა + კომპონენტი ──
-  const helper = `
-/** მარტივი პოზიციის ფოტო — იმავე სიებიდან, საიდანაც სახელი. */
+  if (!/import\s*\{[^}]*\buseState\b[^}]*\}\s*from\s*"react"/.test(s)) {
+    s = s.replace('"use client";', '"use client";\nimport { useState } from "react";');
+  }
+
+  // ── 3) დამხმარეები (ბოლოს — რომ ჩანაცვლების დათვლაში არ ჩაერიოს) ──
+  const helper = `/** მარტივი პოზიციის ფოტო — იმავე სიებიდან, საიდანაც სახელი. */
 function simplePhoto(l: SimpleLine): string | undefined {
   for (const arr of [EXTRAS, SAUCES, DRINKS]) {
     const found = arr.find((x) => x.id === l.itemId);
@@ -58,37 +79,14 @@ function CartIcon({ photo }: { photo?: string }) {
     </div>
   );
 }
+
 `;
 
-  s = s.replace(
-    "export default function CartDrawer() {",
-    helper.trimStart() + "\nexport default function CartDrawer() {",
-  );
+  s = s.replace("export default function CartDrawer() {", helper + "export default function CartDrawer() {");
 
-  // useState — CartIcon-ს სჭირდება
-  if (!/import\s*\{[^}]*\buseState\b[^}]*\}\s*from\s*"react"/.test(s)) {
-    s = s.replace('"use client";', '"use client";\nimport { useState } from "react";');
-  }
-
-  // ── 3) სამი ხატულა — რიგითობით: hh, simple, pizza ──
-  const OLD = '<div className="ci-icon" dangerouslySetInnerHTML={{ __html: SLICE_SVG }} />';
-  const parts = s.split(OLD);
-
-  if (parts.length !== 4) {
-    console.error(`⚠ ველოდი 3 ხატულას, ვიპოვე ${parts.length - 1} — ხელით შეამოწმე.`);
-    process.exit(1);
-  }
-
-  const NEW = [
-    "<CartIcon photo={PIZZA_PHOTOS[l.leftId] || PIZZA_PHOTOS[l.rightId]} />", // ნახევარ-ნახევარი
-    "<CartIcon photo={simplePhoto(l)} />", // მარტივი
-    "<CartIcon photo={pizza ? PIZZA_PHOTOS[pizza.id] : undefined} />", // პიცა
-  ];
-
-  s = parts[0] + NEW[0] + parts[1] + NEW[1] + parts[2] + NEW[2] + parts[3];
-
+  copyFileSync(F, F + ".bak");
   writeFileSync(F, s);
-  console.log("✓ components/CartDrawer.tsx");
+  console.log("✓ components/CartDrawer.tsx (3 ხატულა შეიცვალა)");
 }
 
 // ── 4) სტილი ──

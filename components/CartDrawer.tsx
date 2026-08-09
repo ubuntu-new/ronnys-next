@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 
 import { useCart, type CartLine, type PizzaLine, type SimpleLine } from "@/lib/cart";
 import { useLang } from "@/lib/i18n";
@@ -27,6 +28,30 @@ function simpleDisplayName(l: SimpleLine, lang: Lang): string {
     if (found) return itemName(found, lang);
   }
   return l.name;
+}
+
+/** მარტივი პოზიციის ფოტო — იმავე სიებიდან, საიდანაც სახელი. */
+function simplePhoto(l: SimpleLine): string | undefined {
+  for (const arr of [EXTRAS, SAUCES, DRINKS]) {
+    const found = arr.find((x) => x.id === l.itemId);
+    if (found?.photo) return found.photo;
+  }
+  return undefined;
+}
+
+/** კალათის ხატულა: ფოტო, ხოლო მისი არარსებობის/ჩავარდნის შემთხვევაში — ნაჭერი. */
+function CartIcon({ photo }: { photo?: string }) {
+  const [broken, setBroken] = useState(false);
+
+  if (!photo || broken) {
+    return <div className="ci-icon" dangerouslySetInnerHTML={{ __html: SLICE_SVG }} />;
+  }
+  return (
+    <div className="ci-icon ci-icon-photo">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={photo} alt="" onError={() => setBroken(true)} />
+    </div>
+  );
 }
 
 export default function CartDrawer() {
@@ -105,7 +130,7 @@ export default function CartDrawer() {
       });
       return (
         <div className="cart-item" key={idx}>
-          <div className="ci-icon" dangerouslySetInnerHTML={{ __html: SLICE_SVG }} />
+          <CartIcon photo={PIZZA_PHOTOS[l.leftId] || PIZZA_PHOTOS[l.rightId]} />
           <div className="ci-info">
             <div className="ci-line1">{t("hh_title")} · {nm} · {t(SIZE_KEYS[l.sizeIdx])}</div>
             {(struct.length > 0 || addRows.length > 0) && (
@@ -136,7 +161,7 @@ export default function CartDrawer() {
     if (l.kind === "simple") {
       return (
         <div className="cart-item" key={idx}>
-          <div className="ci-icon" dangerouslySetInnerHTML={{ __html: SLICE_SVG }} />
+          <CartIcon photo={simplePhoto(l)} />
           <div className="ci-info">
             <div className="ci-line1">{simpleDisplayName(l, lang)}</div>
             {l.detail && <div className="ci-detail">{l.detail}</div>}
@@ -157,7 +182,7 @@ export default function CartDrawer() {
     const sizeLabel = t(SIZE_KEYS[l.sizeIdx]);
     return (
       <div className="cart-item" key={idx}>
-        <div className="ci-icon" dangerouslySetInnerHTML={{ __html: SLICE_SVG }} />
+        <CartIcon photo={pizza ? PIZZA_PHOTOS[pizza.id] : undefined} />
         <div className="ci-info">
           <div className="ci-line1">{name} · {sizeLabel}</div>
           {renderMods(l)}
