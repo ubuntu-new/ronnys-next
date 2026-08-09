@@ -454,6 +454,10 @@ model Discount {
   rules DiscountRule[]
   users UserDiscount[]
 
+  // არქივი: ფიზიკურად არაფერი იშლება
+  deletedAt DateTime?
+  @@index([deletedAt])
+
   @@index([type, active])
 }
 
@@ -600,6 +604,10 @@ model Employee {
   orders    Order[]          @relation("OrderCreatedBy")
   deliveries Order[]         @relation("OrderDriver")
   auditLogs AuditLog[]
+
+  // არქივი: ფიზიკურად არაფერი იშლება
+  deletedAt DateTime?
+  @@index([deletedAt])
 
   @@index([role, active])
 }

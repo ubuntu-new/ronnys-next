@@ -57,3 +57,17 @@ export async function restoreSubcategory(id: string) {
   await log("Subcategory", id, s.sub);
   revalidatePath("/admin/categories");
 }
+
+export async function restoreEmployee(id: string) {
+  const s = await requirePermission("can_manage_staff");
+  await db.employee.update({ where: { id }, data: { deletedAt: null } });
+  await log("Employee", id, s.sub);
+  revalidatePath("/admin/employees");
+}
+
+export async function restoreDiscount(id: string) {
+  const s = await requirePermission("can_discount");
+  await db.discount.update({ where: { id }, data: { deletedAt: null } });
+  await log("Discount", id, s.sub);
+  revalidatePath("/admin/discounts");
+}

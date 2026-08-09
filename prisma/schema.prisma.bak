@@ -162,6 +162,8 @@ model Branch {
   // არქივი: არაფერი იშლება ფიზიკურად — deletedAt ივსება და სიებიდან ქრება
   deletedAt DateTime?
 
+  branchProducts BranchProduct[]
+
   @@index([orgId, active, sortOrder])
   @@index([deletedAt])
 }
@@ -285,6 +287,8 @@ model Product {
   comboOptions  ComboSlotOption[]
   discountRules DiscountRule[]
   orderItems    OrderItem[]
+
+  branchProducts BranchProduct[]
 
   @@index([categoryId, active, sortOrder])
   // არქივი: არაფერი იშლება ფიზიკურად — deletedAt ივსება და სიებიდან ქრება
@@ -743,4 +747,35 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@index([at])
+}
+
+
+/// პროდუქტის მდგომარეობა კონკრეტულ ფილიალში.
+/// ჩანაწერის არარსებობა = ხელმისაწვდომია (ნაგულისხმევი).
+/// stock/min/target მარაგის ეტაპისთვისაა — ახლა null-ია.
+model BranchProduct {
+  id        String @id @default(cuid())
+  branchId  String
+  productId String
+
+  /// false = ამ ფილიალში დროებით არ იყიდება („გათავდა“)
+  available Boolean @default(true)
+
+  /// ცალობითი ნაშთი. null = ამ პროდუქტს რაოდენობით არ ვითვლით (მაგ. პიცა)
+  stock       Int?
+  /// ამ ზღვარზე ჩამოსვლა შევსების სიგნალია
+  minLevel    Int?
+  /// რამდენამდე უნდა შეივსოს
+  targetLevel Int?
+
+  note      String?
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  branch  Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, productId])
+  @@index([productId, available])
+  @@index([branchId, available])
 }

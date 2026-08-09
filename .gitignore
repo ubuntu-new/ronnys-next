@@ -9,3 +9,6 @@ build/
 next-env.d.ts
 
 scripts/serviceAccount.json
+
+# backup ფაილები
+*.bak

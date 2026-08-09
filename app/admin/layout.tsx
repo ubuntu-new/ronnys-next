@@ -17,6 +17,8 @@ const NAV = [
   { href: "/admin/availability", label: "ხელმისაწვდომობა" },
   { href: "/admin/categories", label: "კატეგორიები" },
   { href: "/admin/branches", label: "ფილიალები" },
+  { href: "/admin/employees", label: "თანამშრომლები" },
+  { href: "/admin/discounts", label: "ფასდაკლებები" },
   { href: "/admin/settings", label: "პარამეტრები" },
   { href: "/admin/archive", label: "არქივი" },
 ];

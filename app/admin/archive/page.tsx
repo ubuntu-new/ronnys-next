@@ -7,6 +7,8 @@ import {
   restoreBranch,
   restoreCategory,
   restoreSubcategory,
+  restoreEmployee,
+  restoreDiscount,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +28,8 @@ function RestoreButton({ action }: { action: () => Promise<void> }) {
 }
 
 export default async function ArchivePage() {
-  const [products, toppings, combos, branches, categories, subcategories] = await Promise.all([
+  const [products, toppings, combos, branches, categories, subcategories, employees, discounts] =
+    await Promise.all([
     db.product.findMany({
       where: { deletedAt: { not: null } },
       orderBy: { deletedAt: "desc" },
@@ -41,10 +44,19 @@ export default async function ArchivePage() {
       orderBy: { deletedAt: "desc" },
       include: { category: true },
     }),
+    db.employee.findMany({ where: { deletedAt: { not: null } }, orderBy: { deletedAt: "desc" } }),
+    db.discount.findMany({ where: { deletedAt: { not: null } }, orderBy: { deletedAt: "desc" } }),
   ]);
 
   const total =
-    products.length + toppings.length + combos.length + branches.length + categories.length + subcategories.length;
+    products.length +
+    toppings.length +
+    combos.length +
+    branches.length +
+    categories.length +
+    subcategories.length +
+    employees.length +
+    discounts.length;
 
   const sections = [
     {
@@ -111,6 +123,28 @@ export default async function ArchivePage() {
         at: b.deletedAt,
         active: b.active,
         action: restoreBranch.bind(null, b.id),
+      })),
+    },
+    {
+      title: "თანამშრომლები",
+      rows: employees.map((e) => ({
+        id: e.id,
+        name: e.name,
+        note: e.role,
+        at: e.deletedAt,
+        active: e.active,
+        action: restoreEmployee.bind(null, e.id),
+      })),
+    },
+    {
+      title: "ფასდაკლებები",
+      rows: discounts.map((d) => ({
+        id: d.id,
+        name: i18nText(d.name),
+        note: d.type,
+        at: d.deletedAt,
+        active: d.active,
+        action: restoreDiscount.bind(null, d.id),
       })),
     },
   ].filter((s) => s.rows.length > 0);
