@@ -46,64 +46,20 @@ export default function Checkout() {
   const [branchId, setBranchId] = useState<string>(LOCATIONS[0]?.id ?? "");
   const [notes, setNotes] = useState("");
   const [placed, setPlaced] = useState(false);
-  const [orderNo, setOrderNo] = useState<number | null>(null);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   if (!checkoutOpen) return null;
 
   const fee = mode === "delivery" && subtotal < FREE_DELIVERY ? DELIVERY_FEE : 0;
   const grand = Math.round((subtotal + fee) * 100) / 100;
-
-  // ფილიალი ორივე რეჟიმში სავალდებულოა — შეკვეთა კონკრეტულ სამზარეულოში მიდის
   const canPlace =
-    !sending &&
     name.trim() !== "" &&
     phone.trim() !== "" &&
-    branchId !== "" &&
     subtotal >= MIN_ORDER &&
-    (mode === "pickup" || address.trim() !== "");
-
-  const placeOrder = async () => {
-    setSending(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          // ბაზაში ფილიალის id პრეფიქსით ინახება
-          branchId: `br-${branchId}`,
-          fulfillment: mode,
-          name: name.trim(),
-          phone: phone.trim(),
-          address: address.trim(),
-          notes: notes.trim(),
-          // მხოლოდ არჩევანი — ფასს სერვერი თვითონ ითვლის
-          lines,
-          clientTotal: grand,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || t("co_error") || "შეკვეთა ვერ გაიგზავნა.");
-        return;
-      }
-
-      setOrderNo(data.orderNo ?? null);
-      setPlaced(true);
-    } catch {
-      setError(lang === "ka" ? "კავშირი ვერ დამყარდა. სცადე ხელახლა." : "Connection failed. Please try again.");
-    } finally {
-      setSending(false);
-    }
-  };
+    (mode === "pickup" ? branchId !== "" : address.trim() !== "");
 
   const finish = () => {
     clearCart();
     setPlaced(false);
-    setOrderNo(null);
     setName("");
     setPhone("");
     setAddress("");
@@ -127,11 +83,6 @@ export default function Checkout() {
             </div>
             <h3>{t("co_success_title")}</h3>
             <p>{t("co_success_msg").replace("{name}", name.trim() || "")}</p>
-            {orderNo !== null && (
-              <p style={{ fontWeight: 600, marginTop: 4 }}>
-                {lang === "ka" ? "შეკვეთა" : "Order"} #{orderNo}
-              </p>
-            )}
             <button className="place-order-btn" style={{ maxWidth: 220 }} onClick={finish}>
               OK
             </button>
@@ -170,22 +121,21 @@ export default function Checkout() {
                 <input className="co-input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("co_phone_ph")} inputMode="tel" />
               </div>
 
-              {/* ფილიალი ორივე რეჟიმში — მიწოდებაზეც ვინმემ უნდა მოამზადოს */}
-              <div className="co-field">
-                <label>{t("co_branch")}</label>
-                <select className="co-input" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-                  {LOCATIONS.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {lang === "ka" ? loc.branch_ka : loc.branch}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {mode === "delivery" && (
+              {mode === "delivery" ? (
                 <div className="co-field">
                   <label>{t("co_address")}</label>
                   <input className="co-input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder={t("co_address_ph")} />
+                </div>
+              ) : (
+                <div className="co-field">
+                  <label>{t("co_branch")}</label>
+                  <select className="co-input" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+                    {LOCATIONS.map((loc) => (
+                      <option key={loc.id} value={loc.id}>
+                        {lang === "ka" ? loc.branch_ka : loc.branch}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
 
@@ -221,26 +171,11 @@ export default function Checkout() {
                   </div>
                 </div>
               </div>
-
-              {error && (
-                <div
-                  style={{
-                    marginTop: 12,
-                    padding: "10px 14px",
-                    borderRadius: 8,
-                    background: "#fdecea",
-                    color: "#b3261e",
-                    fontSize: 14,
-                  }}
-                >
-                  {error}
-                </div>
-              )}
             </div>
 
             <div className="checkout-foot">
-              <button className="place-order-btn" onClick={placeOrder} disabled={!canPlace}>
-                {sending ? (lang === "ka" ? "იგზავნება…" : "Sending…") : `${t("place_order")} · ${fmt(grand)}`}
+              <button className="place-order-btn" onClick={() => setPlaced(true)} disabled={!canPlace}>
+                {t("place_order")} · {fmt(grand)}
               </button>
             </div>
           </>

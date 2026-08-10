@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 
 const NAV = [
   { href: "/admin", label: "დაფა" },
+  { href: "/admin/orders", label: "შეკვეთები" },
   { href: "/admin/products", label: "პროდუქტები" },
   { href: "/admin/toppings", label: "ტოპინგები" },
   { href: "/admin/combos", label: "კომბოები" },

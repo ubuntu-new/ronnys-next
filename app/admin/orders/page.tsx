@@ -1,0 +1,145 @@
+import Link from "next/link";
+import { db } from "@/lib/db";
+import { i18nText, money } from "@/lib/admin-utils";
+
+export const dynamic = "force-dynamic";
+
+const LABEL: Record<string, string> = {
+  new: "ახალი",
+  confirmed: "დადასტურებული",
+  preparing: "მზადდება",
+  ready: "მზადაა",
+  delivering: "მიაქვთ",
+  completed: "დასრულებული",
+  cancelled: "გაუქმებული",
+};
+
+const TONE: Record<string, React.CSSProperties> = {
+  new: { background: "#fdf3d6", color: "#8a6a12" },
+  completed: { background: "#e8f2e8", color: "#3f7d3f" },
+  cancelled: { background: "#fdecea", color: "#b3261e" },
+};
+
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; branch?: string }>;
+}) {
+  const sp = await searchParams;
+
+  const [branches, orders, counts] = await Promise.all([
+    db.branch.findMany({ where: { deletedAt: null }, orderBy: { sortOrder: "asc" } }),
+    db.order.findMany({
+      where: {
+        ...(sp.status ? { status: sp.status as never } : {}),
+        ...(sp.branch ? { branchId: sp.branch } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: { branch: true, _count: { select: { items: true } } },
+    }),
+    db.order.groupBy({ by: ["status"], _count: true }),
+  ]);
+
+  const countOf = (s: string) => counts.find((c) => c.status === s)?._count ?? 0;
+
+  return (
+    <>
+      <div className="admin-head">
+        <div>
+          <h1>შეკვეთები</h1>
+          <p>
+            {orders.length} ნაჩვენები · ახალი {countOf("new")} · მზადდება {countOf("preparing")}
+          </p>
+        </div>
+      </div>
+
+      <div className="admin-panel">
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+          <Link className={sp.status ? "btn btn-ghost" : "btn"} href="/admin/orders">
+            ყველა
+          </Link>
+          {Object.keys(LABEL).map((s) => (
+            <Link
+              key={s}
+              className={sp.status === s ? "btn" : "btn btn-ghost"}
+              href={`/admin/orders?status=${s}`}
+            >
+              {LABEL[s]} {countOf(s) > 0 && `(${countOf(s)})`}
+            </Link>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link className={sp.branch ? "btn btn-ghost" : "btn"} href="/admin/orders">
+            ყველა ფილიალი
+          </Link>
+          {branches.map((b) => (
+            <Link
+              key={b.id}
+              className={sp.branch === b.id ? "btn" : "btn btn-ghost"}
+              href={`/admin/orders?branch=${b.id}`}
+            >
+              {i18nText(b.name)}
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <div className="admin-panel">
+        {orders.length === 0 ? (
+          <p className="hint" style={{ margin: 0 }}>
+            შეკვეთა ჯერ არ არის.
+          </p>
+        ) : (
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th style={{ width: 80 }}>№</th>
+                <th>კლიენტი</th>
+                <th>ფილიალი</th>
+                <th>ტიპი</th>
+                <th>პოზიცია</th>
+                <th>ჯამი</th>
+                <th>სტატუსი</th>
+                <th>დრო</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map((o) => (
+                <tr key={o.id}>
+                  <td>
+                    <Link href={`/admin/orders/${o.id}`}>
+                      <b>#{o.orderNo}</b>
+                    </Link>
+                  </td>
+                  <td>
+                    {o.customerName ?? "—"}
+                    <div className="hint">{o.customerPhone ?? ""}</div>
+                  </td>
+                  <td>{i18nText(o.branch.name)}</td>
+                  <td>
+                    <span className="hint">
+                      {o.fulfillmentType === "pickup" ? "წაღება" : "მიწოდება"}
+                    </span>
+                  </td>
+                  <td>{o._count.items}</td>
+                  <td>
+                    <b>{money(o.total)} ₾</b>
+                  </td>
+                  <td>
+                    <span className="badge" style={TONE[o.status] ?? { background: "#f5f5f4", color: "#78716c" }}>
+                      {LABEL[o.status] ?? o.status}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="hint">{new Date(o.createdAt).toLocaleString("ka-GE")}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
+  );
+}
