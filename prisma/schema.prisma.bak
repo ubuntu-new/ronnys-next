@@ -842,6 +842,9 @@ model StockLocation {
   levels    StockLevel[]
   movements StockMovement[]
 
+  transfersOut Transfer[] @relation("TransferFrom")
+  transfersIn  Transfer[] @relation("TransferTo")
+
   @@index([type, active])
   @@index([deletedAt])
 }
@@ -870,6 +873,8 @@ model StockItem {
   movements StockMovement[]
 
   consumption ConsumptionRule[]
+
+  transferLines TransferLine[]
 
   @@index([active, category])
   @@index([deletedAt])
@@ -957,5 +962,71 @@ model ConsumptionRule {
   @@unique([productId, toppingId, itemId, sizeKey])
   @@index([productId])
   @@index([toppingId])
+  @@index([itemId])
+}
+
+
+enum TransferStatus {
+  draft     /// იწერება
+  requested /// ფილიალმა მოითხოვა
+  approved  /// საწარმომ დაამტკიცა
+  sent      /// გაიგზავნა — წყაროს ჩამოეწერა
+  received  /// მიღებულია — დანიშნულებას დაემატა
+  cancelled
+}
+
+/// გადატანა ლოკაციებს შორის.
+model Transfer {
+  id String @id @default(cuid())
+  no Int    @unique @default(autoincrement())
+
+  fromLocationId String
+  toLocationId   String
+
+  status TransferStatus @default(draft)
+  note   String?
+
+  /// თითო ეტაპს თავისი პასუხისმგებელი
+  requestedById String?
+  approvedById  String?
+  sentById      String?
+  receivedById  String?
+  cancelledById String?
+
+  requestedAt DateTime?
+  approvedAt  DateTime?
+  sentAt      DateTime?
+  receivedAt  DateTime?
+  cancelledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  from  StockLocation  @relation("TransferFrom", fields: [fromLocationId], references: [id])
+  to    StockLocation  @relation("TransferTo", fields: [toLocationId], references: [id])
+  lines TransferLine[]
+
+  @@index([status, createdAt])
+  @@index([toLocationId, status])
+  @@index([fromLocationId, status])
+}
+
+/// მოთხოვნილი / გაგზავნილი / მიღებული — სამივე ცალკე, რომ სხვაობა ჩანდეს.
+model TransferLine {
+  id         String @id @default(cuid())
+  transferId String
+  itemId     String
+
+  qtyRequested Decimal  @db.Decimal(14, 3)
+  qtyApproved  Decimal? @db.Decimal(14, 3)
+  qtySent      Decimal? @db.Decimal(14, 3)
+  qtyReceived  Decimal? @db.Decimal(14, 3)
+
+  note String?
+
+  transfer Transfer  @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  item     StockItem @relation(fields: [itemId], references: [id])
+
+  @@unique([transferId, itemId])
   @@index([itemId])
 }

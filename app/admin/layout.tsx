@@ -22,6 +22,7 @@ const NAV = [
   { href: "/admin/categories", label: "კატეგორიები" },
   { href: "/admin/stock", label: "მარაგი" },
   { href: "/admin/stock/transfers", label: "გადატანები" },
+  { href: "/admin/stock/production", label: "წარმოება" },
   { href: "/admin/stock/consumption", label: "ხარჯვის წესები" },
   { href: "/admin/branches", label: "ფილიალები" },
   { href: "/admin/employees", label: "თანამშრომლები" },
