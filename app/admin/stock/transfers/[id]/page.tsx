@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { i18nText } from "@/lib/admin-utils";
 import { fmtQty } from "@/lib/stock";
 import { approveTransfer, sendTransfer, receiveTransfer, cancelTransfer } from "../actions";
-import { STATUS } from "../page";
+import { STATUS } from "../status";
 
 export const dynamic = "force-dynamic";
 
