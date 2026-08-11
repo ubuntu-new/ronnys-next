@@ -41,6 +41,7 @@ export async function createCombo(fd: FormData) {
   });
 
   revalidatePath("/admin/combos");
+  revalidatePath("/", "layout"); // საიტის მენიუ მაშინვე განახლდეს
   redirect(`/admin/combos/${c.id}`);
 }
 
@@ -125,6 +126,7 @@ export async function updateCombo(id: string, fd: FormData) {
   });
 
   revalidatePath("/admin/combos");
+  revalidatePath("/", "layout"); // საიტის მენიუ მაშინვე განახლდეს
   redirect("/admin/combos?saved=1");
 }
 
@@ -150,5 +152,6 @@ export async function archiveCombo(id: string) {
     data: { action: "combo.archive", entityType: "Combo", entityId: id, employeeId: session.sub },
   });
   revalidatePath("/admin/combos");
+  revalidatePath("/", "layout"); // საიტის მენიუ მაშინვე განახლდეს
   redirect("/admin/combos?archived=1");
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requirePermission, getSession } from "@/lib/admin-auth";
+import { recordMovements } from "@/lib/stock";
 
 const FLOW = ["new", "confirmed", "preparing", "ready", "delivering", "completed", "cancelled"] as const;
 type Status = (typeof FLOW)[number];
@@ -34,6 +35,28 @@ export async function setOrderStatus(id: string, status: string) {
       ...(status === "completed" ? { deliveredAt: new Date() } : {}),
     },
   });
+
+  // გაუქმებისას ჩამოწერილი მარაგი ბრუნდება — უკუ-მოძრაობით, არა წაშლით
+  if (status === "cancelled") {
+    const moves = await db.stockMovement.findMany({
+      where: { refType: "Order", refId: id, type: "sale" },
+      select: { locationId: true, itemId: true, qty: true },
+    });
+    if (moves.length > 0) {
+      await recordMovements(
+        moves.map((m) => ({
+          locationId: m.locationId,
+          itemId: m.itemId,
+          type: "count_adjust" as const,
+          qty: Number(m.qty) * -1,
+          refType: "Order",
+          refId: id,
+          note: "შეკვეთის გაუქმება — მარაგი დაბრუნდა",
+          employeeId: session?.sub ?? null,
+        })),
+      );
+    }
+  }
 
   await db.auditLog.create({
     data: {

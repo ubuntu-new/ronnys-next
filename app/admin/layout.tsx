@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { getSession } from "@/lib/admin-auth";
 import { logout } from "./actions";
+import AdminSearch from "./_components/AdminSearch";
+import AlertBell from "./_components/AlertBell";
 import "./admin.css";
 
 export const metadata: Metadata = {
@@ -17,10 +20,14 @@ const NAV = [
   { href: "/admin/combos", label: "კომბოები" },
   { href: "/admin/availability", label: "ხელმისაწვდომობა" },
   { href: "/admin/categories", label: "კატეგორიები" },
+  { href: "/admin/stock", label: "მარაგი" },
+  { href: "/admin/stock/transfers", label: "გადატანები" },
+  { href: "/admin/stock/consumption", label: "ხარჯვის წესები" },
   { href: "/admin/branches", label: "ფილიალები" },
   { href: "/admin/employees", label: "თანამშრომლები" },
   { href: "/admin/discounts", label: "ფასდაკლებები" },
   { href: "/admin/settings", label: "პარამეტრები" },
+  { href: "/admin/audit", label: "ჟურნალი" },
   { href: "/admin/archive", label: "არქივი" },
 ];
 
@@ -42,6 +49,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <aside className="admin-side">
             <div className="admin-brand">
               Ronny&apos;s <span>Admin</span>
+              <AlertBell />
             </div>
             <nav className="admin-nav">
               {NAV.map((n) => (
@@ -59,7 +67,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               </form>
             </div>
           </aside>
-          <main className="admin-main">{children}</main>
+          <main className="admin-main">
+            <Suspense fallback={null}>
+              <AdminSearch />
+            </Suspense>
+            {children}
+          </main>
         </div>
       </body>
     </html>

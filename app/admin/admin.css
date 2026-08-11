@@ -157,3 +157,107 @@
   .admin-main { padding: 20px 16px 50px; }
   .field-row { grid-template-columns: 1fr; }
 }
+
+
+/* ── ცხრილების ძებნა ── */
+.admin-search {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0 14px;
+  background: var(--a-bg);
+}
+.admin-search input {
+  flex: 1;
+  max-width: 420px;
+  border: 1px solid var(--a-line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font: inherit;
+  background: #fff;
+}
+.admin-search input:focus {
+  outline: none;
+  border-color: var(--a-saffron);
+  box-shadow: 0 0 0 3px rgba(241, 195, 56, .25);
+}
+.admin-search-count {
+  font-size: 13px;
+  color: var(--a-muted);
+  white-space: nowrap;
+}
+.admin-search button {
+  background: none;
+  border: 1px solid var(--a-line);
+  color: var(--a-muted);
+  padding: 7px 12px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.admin-search button:hover { background: #f5f5f4; color: var(--a-ink); }
+
+@media (max-width: 760px) {
+  .admin-search { position: static; }
+  .admin-search input { max-width: none; }
+}
+
+
+/* ── შეტყობინებების ზარი ── */
+.admin-brand { position: relative; display: flex; align-items: center; gap: 8px; }
+.alert-bell { position: relative; margin-left: auto; }
+.alert-bell > button {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 1;
+  padding: 4px;
+  position: relative;
+}
+.alert-bell-dot {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  background: var(--a-danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 17px;
+  height: 17px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+}
+.alert-bell-menu {
+  position: absolute;
+  top: 30px;
+  right: 0;
+  z-index: 30;
+  background: #fff;
+  color: var(--a-ink);
+  border: 1px solid var(--a-line);
+  border-radius: 10px;
+  min-width: 250px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+  overflow: hidden;
+}
+.alert-bell-menu a {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  color: var(--a-ink);
+  text-decoration: none;
+  font-size: 14px;
+  border-bottom: 1px solid var(--a-line);
+}
+.alert-bell-menu a:last-child { border-bottom: 0; }
+.alert-bell-menu a:hover { background: #faf9f7; }
+.alert-bell-menu a b { color: var(--a-orange); }
+.alert-bell-empty { padding: 14px; font-size: 14px; color: var(--a-muted); }

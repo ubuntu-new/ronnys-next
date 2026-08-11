@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getMenu } from "@/lib/menu-db";
 import { priceOrder, type CartLineIn } from "@/lib/order-pricing";
+import { computeConsumption, locationForBranch } from "@/lib/consumption";
+import { recordMovements } from "@/lib/stock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -135,6 +137,32 @@ export async function POST(req: Request) {
       },
       select: { id: true, orderNo: true, total: true },
     });
+
+    // ── მარაგის ჩამოწერა ──
+    // შეკვეთა უკვე შექმნილია; ჩამოწერის ჩავარდნა მას არ აუქმებს.
+    try {
+      const loc = await locationForBranch(branch.id);
+      if (loc) {
+        const used = await computeConsumption(priced.items);
+        if (used.length > 0) {
+          await recordMovements(
+            used.map((u) => ({
+              locationId: loc.id,
+              itemId: u.itemId,
+              type: "sale" as const,
+              qty: -u.qty,
+              refType: "Order",
+              refId: order.id,
+              note: `შეკვეთა #${order.orderNo}`,
+            })),
+          );
+        }
+      } else {
+        console.warn(`order: ფილიალს ${branch.id} საწყობის ლოკაცია არ აქვს — ჩამოწერა გამოტოვდა`);
+      }
+    } catch (e) {
+      console.error("order: მარაგის ჩამოწერა ჩავარდა (შეკვეთა შენარჩუნებულია)", e);
+    }
 
     return NextResponse.json({
       ok: true,

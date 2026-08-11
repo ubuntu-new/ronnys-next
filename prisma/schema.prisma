@@ -164,6 +164,8 @@ model Branch {
 
   branchProducts BranchProduct[]
 
+  stockLocation StockLocation?
+
   @@index([orgId, active, sortOrder])
   @@index([deletedAt])
 }
@@ -290,6 +292,8 @@ model Product {
 
   branchProducts BranchProduct[]
 
+  consumption ConsumptionRule[]
+
   @@index([categoryId, active, sortOrder])
   // არქივი: არაფერი იშლება ფიზიკურად — deletedAt ივსება და სიებიდან ქრება
   deletedAt DateTime?
@@ -342,6 +346,8 @@ model Topping {
 
   // არქივი: არაფერი იშლება ფიზიკურად — deletedAt ივსება და სიებიდან ქრება
   deletedAt DateTime?
+
+  consumption ConsumptionRule[]
 
   @@index([active, sortOrder])
   @@index([deletedAt])
@@ -755,6 +761,9 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@index([at])
+  @@index([employeeId, at])
+  @@index([action, at])
+  @@index([branchId, at])
 }
 
 
@@ -786,4 +795,238 @@ model BranchProduct {
   @@unique([branchId, productId])
   @@index([productId, available])
   @@index([branchId, available])
+}
+
+
+// ═══════════════════════════════════════════════
+// საწყობი — ეტაპი 3A
+// ═══════════════════════════════════════════════
+
+enum StockLocationType {
+  warehouse /// ცენტრალური საწარმო
+  branch    /// ფილიალის სამზარეულო
+}
+
+enum StockUnit {
+  g
+  kg
+  ml
+  l
+  pcs
+}
+
+enum StockMoveType {
+  receipt        /// მიღება მიმწოდებლისგან
+  transfer_out   /// გაცემა სხვა ლოკაციაზე
+  transfer_in    /// მიღება სხვა ლოკაციიდან
+  production_in  /// წარმოებამ დაამზადა
+  production_out /// წარმოებამ დახარჯა
+  sale           /// შეკვეთაზე ჩამოწერა
+  waste          /// ჩამოწერა (გაფუჭდა, დაიღვარა)
+  count_adjust   /// ინვენტარიზაციის სხვაობა
+}
+
+/// სად ინახება მარაგი. ფილიალს თითო აქვს, პლუს ცენტრალური საწარმო.
+model StockLocation {
+  id       String            @id @default(cuid())
+  name     Json
+  type     StockLocationType
+  branchId String?           @unique
+  active   Boolean           @default(true)
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  branch    Branch?         @relation(fields: [branchId], references: [id])
+  levels    StockLevel[]
+  movements StockMovement[]
+
+  transfersOut Transfer[] @relation("TransferFrom")
+  transfersIn  Transfer[] @relation("TransferTo")
+
+  @@index([type, active])
+  @@index([deletedAt])
+}
+
+/// საწყობის ერთეული — ის, რასაც ინახავ (და არა ის, რასაც ყიდი).
+/// მოცარელა კგ-ობით, კოკა-კოლა ცალობით, ფქვილი კგ-ობით.
+model StockItem {
+  id   String    @id @default(cuid())
+  sku  String?   @unique
+  name Json
+  unit StockUnit
+
+  category String? /// "dairy" | "meat" | "veg" | "packaging" | "drink"
+
+  /// true = საწარმოში მზადდება რეცეპტით (ცომი, სოუსი), არა ყიდულობ
+  isProduced Boolean @default(false)
+
+  note   String?
+  active Boolean @default(true)
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  levels    StockLevel[]
+  movements StockMovement[]
+
+  consumption ConsumptionRule[]
+
+  transferLines TransferLine[]
+
+  @@index([active, category])
+  @@index([deletedAt])
+}
+
+/// მიმდინარე ნაშთი ლოკაციაზე. `qty` მოძრაობების ჯამის ქეშია —
+/// იმავე ტრანზაქციაში ახლდება და ნებისმიერ დროს გადაითვლება.
+model StockLevel {
+  id         String @id @default(cuid())
+  locationId String
+  itemId     String
+
+  qty Decimal @default(0) @db.Decimal(14, 3)
+
+  /// ამ ზღვარზე ჩამოსვლა შევსების სიგნალია
+  minLevel    Decimal? @db.Decimal(14, 3)
+  /// რამდენამდე უნდა შეივსოს
+  targetLevel Decimal? @db.Decimal(14, 3)
+
+  updatedAt DateTime @updatedAt
+
+  location StockLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  item     StockItem     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, itemId])
+  @@index([itemId])
+}
+
+/// ჟურნალი — ყველა მოძრაობა. აქედან გამომდინარეობს ნაშთი.
+model StockMovement {
+  id         String        @id @default(cuid())
+  locationId String
+  itemId     String
+  type       StockMoveType
+
+  /// + შემოსვლა, − გასვლა
+  qty          Decimal  @db.Decimal(14, 3)
+  /// ნაშთი ამ მოძრაობის შემდეგ — აუდიტისთვის
+  balanceAfter Decimal? @db.Decimal(14, 3)
+
+  /// რამ გამოიწვია: "Order" | "Transfer" | "ProductionOrder" | null (ხელით)
+  refType String?
+  refId   String?
+
+  note       String?
+  employeeId String?
+  at         DateTime @default(now())
+
+  location StockLocation @relation(fields: [locationId], references: [id])
+  item     StockItem     @relation(fields: [itemId], references: [id])
+
+  @@index([locationId, itemId, at])
+  @@index([refType, refId])
+  @@index([at])
+}
+
+
+/// რა იხარჯება საწყობიდან, როცა მენიუს პოზიცია იყიდება.
+///
+/// მფლობელი ერთია — ან პროდუქტი, ან ტოპინგი:
+///   productId → ბაზა (ცომი, სოუსი, ყუთი; ან თავად კოკა-კოლა 1 ცალი)
+///   toppingId → ტოპინგის ხარჯი (მოცარელა 0.18 კგ)
+///
+/// qty იმ ერთეულშია, რომელიც StockItem-ს აქვს.
+model ConsumptionRule {
+  id String @id @default(cuid())
+
+  itemId String
+  qty    Decimal @db.Decimal(14, 3)
+
+  /// "S" | "M" | "XL" — ცარიელი ნიშნავს „ყველა ზომაზე"
+  sizeKey String?
+
+  productId String?
+  toppingId String?
+
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item    StockItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  product Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  topping Topping?  @relation(fields: [toppingId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, toppingId, itemId, sizeKey])
+  @@index([productId])
+  @@index([toppingId])
+  @@index([itemId])
+}
+
+
+enum TransferStatus {
+  draft     /// იწერება
+  requested /// ფილიალმა მოითხოვა
+  approved  /// საწარმომ დაამტკიცა
+  sent      /// გაიგზავნა — წყაროს ჩამოეწერა
+  received  /// მიღებულია — დანიშნულებას დაემატა
+  cancelled
+}
+
+/// გადატანა ლოკაციებს შორის.
+model Transfer {
+  id String @id @default(cuid())
+  no Int    @unique @default(autoincrement())
+
+  fromLocationId String
+  toLocationId   String
+
+  status TransferStatus @default(draft)
+  note   String?
+
+  /// თითო ეტაპს თავისი პასუხისმგებელი
+  requestedById String?
+  approvedById  String?
+  sentById      String?
+  receivedById  String?
+  cancelledById String?
+
+  requestedAt DateTime?
+  approvedAt  DateTime?
+  sentAt      DateTime?
+  receivedAt  DateTime?
+  cancelledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  from  StockLocation  @relation("TransferFrom", fields: [fromLocationId], references: [id])
+  to    StockLocation  @relation("TransferTo", fields: [toLocationId], references: [id])
+  lines TransferLine[]
+
+  @@index([status, createdAt])
+  @@index([toLocationId, status])
+  @@index([fromLocationId, status])
+}
+
+/// მოთხოვნილი / გაგზავნილი / მიღებული — სამივე ცალკე, რომ სხვაობა ჩანდეს.
+model TransferLine {
+  id         String @id @default(cuid())
+  transferId String
+  itemId     String
+
+  qtyRequested Decimal  @db.Decimal(14, 3)
+  qtyApproved  Decimal? @db.Decimal(14, 3)
+  qtySent      Decimal? @db.Decimal(14, 3)
+  qtyReceived  Decimal? @db.Decimal(14, 3)
+
+  note String?
+
+  transfer Transfer  @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  item     StockItem @relation(fields: [itemId], references: [id])
+
+  @@unique([transferId, itemId])
+  @@index([itemId])
 }

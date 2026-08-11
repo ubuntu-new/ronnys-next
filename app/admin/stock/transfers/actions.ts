@@ -1,0 +1,284 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { db } from "@/lib/db";
+import { requirePermission, getSession } from "@/lib/admin-auth";
+import { recordMovements } from "@/lib/stock";
+import { logAction } from "@/lib/audit";
+import { fdNum, fdStr } from "@/lib/admin-utils";
+
+/**
+ * გადატანის ეტაპები.
+ *
+ * მოძრაობა მხოლოდ ორ წერტილში ხდება:
+ *   გაგზავნა → წყაროს აკლდება (`transfer_out`)
+ *   მიღება   → დანიშნულებას ემატება (`transfer_in`)
+ *
+ * შუალედური ეტაპები (მოთხოვნა, დამტკიცება) მარაგს არ ეხება — ისინი
+ * შეთანხმებაა, არა მოძრაობა. ამიტომ დამტკიცებული, მაგრამ გაუგზავნელი
+ * გადატანა ნაშთს არ ცვლის.
+ */
+
+const FLOW: Record<string, string[]> = {
+  draft: ["requested", "cancelled"],
+  requested: ["approved", "cancelled"],
+  approved: ["sent", "cancelled"],
+  sent: ["received", "cancelled"],
+  received: [],
+  cancelled: [],
+};
+
+async function loadOrFail(id: string) {
+  const t = await db.transfer.findUnique({ where: { id }, include: { lines: true } });
+  if (!t) throw new Error("გადატანა ვერ მოიძებნა");
+  return t;
+}
+
+function guard(from: string, to: string) {
+  if (!FLOW[from]?.includes(to)) {
+    throw new Error(`სტატუსი "${from}" → "${to}" დაუშვებელია`);
+  }
+}
+
+// ─────────────────────────────────────────────
+// შექმნა
+// ─────────────────────────────────────────────
+
+export async function createTransfer(fd: FormData) {
+  const s = await requirePermission("can_transfer_branch");
+
+  const fromLocationId = fdStr(fd, "fromLocationId");
+  const toLocationId = fdStr(fd, "toLocationId");
+  if (!fromLocationId || !toLocationId) throw new Error("აირჩიე ორივე ლოკაცია");
+  if (fromLocationId === toLocationId) throw new Error("წყარო და დანიშნულება ერთი ვერ იქნება");
+
+  // მხოლოდ შევსებული სტრიქონები
+  const lines: { itemId: string; qty: number }[] = [];
+  for (const [key, value] of fd.entries()) {
+    if (!key.startsWith("qty_")) continue;
+    const qty = Number(String(value).replace(",", "."));
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    lines.push({ itemId: key.slice(4), qty });
+  }
+  if (lines.length === 0) throw new Error("შეავსე ერთი პოზიცია მაინც");
+
+  const t = await db.transfer.create({
+    data: {
+      fromLocationId,
+      toLocationId,
+      status: "requested",
+      note: fdStr(fd, "note") || null,
+      requestedById: s.sub,
+      requestedAt: new Date(),
+      lines: { create: lines.map((l) => ({ itemId: l.itemId, qtyRequested: l.qty })) },
+    },
+  });
+
+  await logAction({
+    action: "transfer.requested",
+    entityType: "Transfer",
+    entityId: t.id,
+    after: { no: t.no, lines: lines.length, from: fromLocationId, to: toLocationId },
+    employeeId: s.sub,
+  });
+
+  revalidatePath("/admin/stock/transfers");
+  redirect(`/admin/stock/transfers/${t.id}`);
+}
+
+// ─────────────────────────────────────────────
+// დამტკიცება — რაოდენობის შეცვლით
+// ─────────────────────────────────────────────
+
+export async function approveTransfer(id: string, fd: FormData) {
+  const s = await requirePermission("can_transfer_branch");
+  const t = await loadOrFail(id);
+  guard(t.status, "approved");
+
+  const changes: Record<string, { requested: number; approved: number }> = {};
+
+  for (const l of t.lines) {
+    const q = fdNum(fd, `approve_${l.id}`);
+    const approved = q === null ? Number(l.qtyRequested) : q;
+    if (approved < 0) throw new Error("რაოდენობა უარყოფითი ვერ იქნება");
+
+    await db.transferLine.update({ where: { id: l.id }, data: { qtyApproved: approved } });
+
+    if (approved !== Number(l.qtyRequested)) {
+      changes[l.itemId] = { requested: Number(l.qtyRequested), approved };
+    }
+  }
+
+  await db.transfer.update({
+    where: { id },
+    data: { status: "approved", approvedById: s.sub, approvedAt: new Date() },
+  });
+
+  await logAction({
+    action: "transfer.approved",
+    entityType: "Transfer",
+    entityId: id,
+    after: { no: t.no, changed: changes },
+    employeeId: s.sub,
+  });
+
+  revalidatePath("/admin/stock/transfers");
+  redirect(`/admin/stock/transfers/${id}?ok=approved`);
+}
+
+// ─────────────────────────────────────────────
+// გაგზავნა — წყაროს აკლდება
+// ─────────────────────────────────────────────
+
+export async function sendTransfer(id: string, fd: FormData) {
+  const s = await requirePermission("can_transfer_branch");
+  const t = await loadOrFail(id);
+  guard(t.status, "sent");
+
+  const moves = [];
+  const sent: Record<string, number> = {};
+
+  for (const l of t.lines) {
+    const fallback = l.qtyApproved != null ? Number(l.qtyApproved) : Number(l.qtyRequested);
+    const q = fdNum(fd, `send_${l.id}`);
+    const qty = q === null ? fallback : q;
+    if (qty < 0) throw new Error("რაოდენობა უარყოფითი ვერ იქნება");
+
+    await db.transferLine.update({ where: { id: l.id }, data: { qtySent: qty } });
+    if (qty === 0) continue;
+
+    sent[l.itemId] = qty;
+    moves.push({
+      locationId: t.fromLocationId,
+      itemId: l.itemId,
+      type: "transfer_out" as const,
+      qty: -qty,
+      refType: "Transfer",
+      refId: id,
+      note: `გადატანა #${t.no} — გაგზავნა`,
+      employeeId: s.sub,
+    });
+  }
+
+  if (moves.length > 0) await recordMovements(moves);
+
+  await db.transfer.update({
+    where: { id },
+    data: { status: "sent", sentById: s.sub, sentAt: new Date() },
+  });
+
+  await logAction({
+    action: "transfer.sent",
+    entityType: "Transfer",
+    entityId: id,
+    after: { no: t.no, sent },
+    employeeId: s.sub,
+  });
+
+  revalidatePath("/admin/stock");
+  revalidatePath("/admin/stock/transfers");
+  redirect(`/admin/stock/transfers/${id}?ok=sent`);
+}
+
+// ─────────────────────────────────────────────
+// მიღება — დანიშნულებას ემატება
+// ─────────────────────────────────────────────
+
+export async function receiveTransfer(id: string, fd: FormData) {
+  const s = await requirePermission("can_transfer_branch");
+  const t = await loadOrFail(id);
+  guard(t.status, "received");
+
+  const moves = [];
+  const received: Record<string, number> = {};
+  const gaps: Record<string, { sent: number; received: number }> = {};
+
+  for (const l of t.lines) {
+    const sentQty = l.qtySent != null ? Number(l.qtySent) : 0;
+    const q = fdNum(fd, `receive_${l.id}`);
+    const qty = q === null ? sentQty : q;
+    if (qty < 0) throw new Error("რაოდენობა უარყოფითი ვერ იქნება");
+
+    await db.transferLine.update({ where: { id: l.id }, data: { qtyReceived: qty } });
+    if (qty !== sentQty) gaps[l.itemId] = { sent: sentQty, received: qty };
+    if (qty === 0) continue;
+
+    received[l.itemId] = qty;
+    moves.push({
+      locationId: t.toLocationId,
+      itemId: l.itemId,
+      type: "transfer_in" as const,
+      qty,
+      refType: "Transfer",
+      refId: id,
+      note: `გადატანა #${t.no} — მიღება`,
+      employeeId: s.sub,
+    });
+  }
+
+  if (moves.length > 0) await recordMovements(moves);
+
+  await db.transfer.update({
+    where: { id },
+    data: { status: "received", receivedById: s.sub, receivedAt: new Date() },
+  });
+
+  await logAction({
+    action: "transfer.received",
+    entityType: "Transfer",
+    entityId: id,
+    after: { no: t.no, received, ...(Object.keys(gaps).length ? { სხვაობა: gaps } : {}) },
+    employeeId: s.sub,
+  });
+
+  revalidatePath("/admin/stock");
+  revalidatePath("/admin/stock/transfers");
+  redirect(`/admin/stock/transfers/${id}?ok=received`);
+}
+
+// ─────────────────────────────────────────────
+// გაუქმება
+// ─────────────────────────────────────────────
+
+export async function cancelTransfer(id: string) {
+  const s = await requirePermission("can_transfer_branch");
+  const session = await getSession();
+  const t = await loadOrFail(id);
+  guard(t.status, "cancelled");
+
+  // თუ უკვე გაგზავნილი იყო, საქონელი წყაროს უბრუნდება
+  if (t.status === "sent") {
+    const moves = t.lines
+      .filter((l) => l.qtySent != null && Number(l.qtySent) > 0)
+      .map((l) => ({
+        locationId: t.fromLocationId,
+        itemId: l.itemId,
+        type: "transfer_in" as const,
+        qty: Number(l.qtySent),
+        refType: "Transfer",
+        refId: id,
+        note: `გადატანა #${t.no} — გაუქმდა, დაბრუნდა`,
+        employeeId: session?.sub ?? null,
+      }));
+    if (moves.length > 0) await recordMovements(moves);
+  }
+
+  await db.transfer.update({
+    where: { id },
+    data: { status: "cancelled", cancelledById: s.sub, cancelledAt: new Date() },
+  });
+
+  await logAction({
+    action: "transfer.cancelled",
+    entityType: "Transfer",
+    entityId: id,
+    before: { status: t.status },
+    after: { no: t.no, returned: t.status === "sent" },
+    employeeId: s.sub,
+  });
+
+  revalidatePath("/admin/stock");
+  revalidatePath("/admin/stock/transfers");
+  redirect(`/admin/stock/transfers/${id}?ok=cancelled`);
+}
