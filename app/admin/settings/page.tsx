@@ -6,6 +6,7 @@ import {
   saveDiscountRules,
   saveTax,
   saveSocial,
+  saveTelegram,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,8 @@ export default async function SettingsPage({
   const rules = obj(map.discountRules);
   const verif = obj(map.discountVerification);
   const tax = obj(map.tax);
+  const tg = obj(map.telegram);
+  const tgEvents = obj(tg.events);
   const social = Array.isArray(map.social) ? (map.social as Bag[]) : [];
 
   return (
@@ -183,6 +186,52 @@ export default async function SettingsPage({
             </div>
           </div>
         </div>
+        <div className="form-actions">
+          <button className="btn" type="submit">შენახვა</button>
+        </div>
+      </form>
+
+      {/* ── Telegram ── */}
+      <form className="admin-panel admin-form" action={saveTelegram} style={{ maxWidth: "none" }}>
+        <h2>Telegram შეტყობინებები</h2>
+        <p className="hint" style={{ marginTop: -8 }}>
+          ბოტის ტოკენი <code>.env</code>-შია (<code>TELEGRAM_BOT_TOKEN</code>) — აქ არ ჩანს.
+        </p>
+
+        <div className="field-check">
+          <input id="tg_enabled" name="enabled" type="checkbox" defaultChecked={b(tg.enabled, false)} />
+          <label htmlFor="tg_enabled">ჩართულია</label>
+        </div>
+
+        <div className="field">
+          <label htmlFor="chatId">Chat ID</label>
+          <input id="chatId" name="chatId" type="text" defaultValue={String(tg.chatId ?? "")} placeholder="-1001234567890" />
+          <span className="hint">ჯგუფის id მინუსით იწყება, პირადი ჩატისა — არა.</span>
+        </div>
+
+        <div className="field">
+          <label>რაზე მოვიდეს</label>
+          <div className="field-check">
+            <input id="ev_order" name="ev_order" type="checkbox" defaultChecked={b(tgEvents.order, true)} />
+            <label htmlFor="ev_order">🍕 ახალი შეკვეთა</label>
+          </div>
+          <div className="field-check">
+            <input id="ev_transferRequest" name="ev_transferRequest" type="checkbox" defaultChecked={b(tgEvents.transferRequest, true)} />
+            <label htmlFor="ev_transferRequest">📦 შევსების მოთხოვნა (დასამტკიცებელი)</label>
+          </div>
+          <div className="field-check">
+            <input id="ev_transferSent" name="ev_transferSent" type="checkbox" defaultChecked={b(tgEvents.transferSent, true)} />
+            <label htmlFor="ev_transferSent">🚚 გზავნილი გამოვიდა</label>
+          </div>
+          <div className="field-check">
+            <input id="ev_lowStock" name="ev_lowStock" type="checkbox" defaultChecked={b(tgEvents.lowStock, true)} />
+            <label htmlFor="ev_lowStock">⚠️ მარაგი ზღვარზე (დღიური შეჯამება)</label>
+          </div>
+          <span className="hint">
+            გამორთე ის, რაც ხმაურია — ცოტა და საჭირო შეტყობინება ჯობია ბევრს და უგულებელყოფილს.
+          </span>
+        </div>
+
         <div className="form-actions">
           <button className="btn" type="submit">შენახვა</button>
         </div>

@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { requirePermission, getSession } from "@/lib/admin-auth";
 import { recordMovements } from "@/lib/stock";
 import { logAction } from "@/lib/audit";
+import { notifyTransferRequest, notifyTransferSent } from "@/lib/telegram";
 import { fdNum, fdStr } from "@/lib/admin-utils";
 
 /**
@@ -81,6 +82,23 @@ export async function createTransfer(fd: FormData) {
     entityId: t.id,
     after: { no: t.no, lines: lines.length, from: fromLocationId, to: toLocationId },
     employeeId: s.sub,
+  });
+
+  const locs = await db.stockLocation.findMany({
+    where: { id: { in: [fromLocationId, toLocationId] } },
+    select: { id: true, name: true },
+  });
+  const nm = (id: string) => {
+    const n = locs.find((l) => l.id === id)?.name as Record<string, unknown> | undefined;
+    return String(n?.ka ?? n?.en ?? "");
+  };
+
+  void notifyTransferRequest({
+    no: t.no,
+    from: nm(fromLocationId),
+    to: nm(toLocationId),
+    lines: lines.length,
+    by: s.name,
   });
 
   revalidatePath("/admin/stock/transfers");
@@ -174,6 +192,22 @@ export async function sendTransfer(id: string, fd: FormData) {
     entityId: id,
     after: { no: t.no, sent },
     employeeId: s.sub,
+  });
+
+  const full = await db.transfer.findUnique({
+    where: { id },
+    select: { from: { select: { name: true } }, to: { select: { name: true } } },
+  });
+  const label = (n: unknown) => {
+    const o = n as Record<string, unknown> | undefined;
+    return String(o?.ka ?? o?.en ?? "");
+  };
+
+  void notifyTransferSent({
+    no: t.no,
+    from: label(full?.from.name),
+    to: label(full?.to.name),
+    by: s.name,
   });
 
   revalidatePath("/admin/stock");

@@ -40,6 +40,21 @@ export async function middleware(req: NextRequest) {
   const detected = accept.includes("ka") || accept.includes("ge") ? "ka" : accept.includes("en") ? "en" : DEFAULT_LOCALE;
   const url = req.nextUrl.clone();
   url.pathname = `/${detected}${pathname === "/" ? "" : pathname}`;
+
+  // Next-ს reverse proxy-ს უკან საჯარო დომენი არ იცის და localhost:3001-ზე
+  // აწყობს რედირექტს. NEXT_PUBLIC_SITE_URL-ს ვენდობით, თუ არის.
+  const site = process.env.NEXT_PUBLIC_SITE_URL;
+  if (site) {
+    try {
+      const base = new URL(site);
+      url.protocol = base.protocol;
+      url.host = base.host;
+      url.port = base.port;
+    } catch {
+      /* არასწორი URL — ვტოვებთ როგორც არის */
+    }
+  }
+
   return NextResponse.redirect(url);
 }
 

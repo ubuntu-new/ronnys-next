@@ -104,3 +104,22 @@ export async function saveSocial(fd: FormData) {
   await put("social", next as unknown as object, s.sub);
   redirect("/admin/settings?saved=social");
 }
+
+export async function saveTelegram(fd: FormData) {
+  const s = await requirePermission("can_edit_menu");
+  await put(
+    "telegram",
+    {
+      enabled: fdBool(fd, "enabled"),
+      chatId: fdStr(fd, "chatId"),
+      events: {
+        order: fdBool(fd, "ev_order"),
+        transferRequest: fdBool(fd, "ev_transferRequest"),
+        transferSent: fdBool(fd, "ev_transferSent"),
+        lowStock: fdBool(fd, "ev_lowStock"),
+      },
+    },
+    s.sub,
+  );
+  redirect("/admin/settings?saved=telegram");
+}

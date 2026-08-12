@@ -4,6 +4,7 @@ import { getMenu } from "@/lib/menu-db";
 import { priceOrder, type CartLineIn } from "@/lib/order-pricing";
 import { computeConsumption, locationForBranch } from "@/lib/consumption";
 import { recordMovements } from "@/lib/stock";
+import { notifyNewOrder } from "@/lib/telegram";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -136,6 +137,17 @@ export async function POST(req: Request) {
         },
       },
       select: { id: true, orderNo: true, total: true },
+    });
+
+    // ── Telegram (ფონურად — პასუხს არ ვაყოვნებთ) ──
+    void notifyNewOrder({
+      orderNo: order.orderNo,
+      branch: String((branch.name as Record<string, unknown>)?.ka ?? (branch.name as Record<string, unknown>)?.en ?? ""),
+      total: Number(order.total).toFixed(2),
+      itemCount: priced.items.length,
+      type: fulfillment,
+      customer: name,
+      phone,
     });
 
     // ── მარაგის ჩამოწერა ──
