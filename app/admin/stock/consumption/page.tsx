@@ -52,9 +52,14 @@ export default async function ConsumptionPage({
             {toppings.length}
           </p>
         </div>
-        <Link className="btn btn-ghost" href="/admin/stock">
-          ← მარაგი
-        </Link>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link className="btn" href="/admin/stock/consumption/bulk">
+            ტოპინგების ჯგუფური შევსება
+          </Link>
+          <Link className="btn btn-ghost" href="/admin/stock">
+            ← მარაგი
+          </Link>
+        </div>
       </div>
 
       {sp.saved && <div className="alert alert-ok">შენახულია.</div>}

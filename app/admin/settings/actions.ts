@@ -123,3 +123,17 @@ export async function saveTelegram(fd: FormData) {
   );
   redirect("/admin/settings?saved=telegram");
 }
+
+export async function saveFixedCosts(fd: FormData) {
+  const s = await requirePermission("can_view_reports");
+  await put(
+    "fixedCosts",
+    {
+      rent: fdNum(fd, "rent") ?? 0,
+      utilities: fdNum(fd, "utilities") ?? 0,
+      other: fdNum(fd, "other") ?? 0,
+    },
+    s.sub,
+  );
+  redirect("/admin/settings?saved=fixedCosts");
+}

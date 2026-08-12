@@ -7,6 +7,7 @@ import {
   saveTax,
   saveSocial,
   saveTelegram,
+  saveFixedCosts,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,7 @@ export default async function SettingsPage({
   const tax = obj(map.tax);
   const tg = obj(map.telegram);
   const tgEvents = obj(tg.events);
+  const fc = obj(map.fixedCosts);
   const social = Array.isArray(map.social) ? (map.social as Bag[]) : [];
 
   return (
@@ -165,6 +167,31 @@ export default async function SettingsPage({
             <option value="upload">დოკუმენტის ატვირთვა</option>
           </select>
           <span className="hint">„ატვირთვა" ფაილების საცავს მოითხოვს — ჯერ არ გვაქვს.</span>
+        </div>
+        <div className="form-actions">
+          <button className="btn" type="submit">შენახვა</button>
+        </div>
+      </form>
+
+      {/* fixed costs */}
+      <form className="admin-panel admin-form" action={saveFixedCosts} style={{ maxWidth: "none" }}>
+        <h2>ფიქსირებული ხარჯები (თვეში)</h2>
+        <p className="hint" style={{ marginTop: -8 }}>
+          ამის გარეშე დაფა სუფთა მოგებას არ აჩვენებს. შრომა ცვლებიდან ითვლება.
+        </p>
+        <div className="field-row" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+          <div className="field">
+            <label htmlFor="rent">ქირა (₾)</label>
+            <input id="rent" name="rent" type="number" step="0.01" min="0" defaultValue={n(fc.rent, 0)} />
+          </div>
+          <div className="field">
+            <label htmlFor="utilities">კომუნალური (₾)</label>
+            <input id="utilities" name="utilities" type="number" step="0.01" min="0" defaultValue={n(fc.utilities, 0)} />
+          </div>
+          <div className="field">
+            <label htmlFor="other">სხვა (₾)</label>
+            <input id="other" name="other" type="number" step="0.01" min="0" defaultValue={n(fc.other, 0)} />
+          </div>
         </div>
         <div className="form-actions">
           <button className="btn" type="submit">შენახვა</button>
