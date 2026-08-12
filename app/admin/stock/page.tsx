@@ -185,9 +185,18 @@ export default async function StockPage({
               </div>
             </div>
 
-            <div className="field">
-              <label htmlFor="note">შენიშვნა</label>
-              <input id="note" name="note" type="text" placeholder="მიმწოდებელი, მიზეზი…" />
+            <div className="field-row">
+              <div className="field">
+                <label htmlFor="unitCost">ერთეულის ფასი (₾)</label>
+                <input id="unitCost" name="unitCost" type="number" step="0.0001" min="0" placeholder="მხოლოდ მიღებისას" />
+                <span className="hint">
+                  შესყიდვის ფასი ერთეულზე. ამის გარეშე თვითღირებულება ვერ დაითვლება.
+                </span>
+              </div>
+              <div className="field">
+                <label htmlFor="note">შენიშვნა</label>
+                <input id="note" name="note" type="text" placeholder="მიმწოდებელი, მიზეზი…" />
+              </div>
             </div>
 
             <p className="hint" style={{ marginTop: -4 }}>

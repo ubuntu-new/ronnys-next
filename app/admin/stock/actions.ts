@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/admin-auth";
 import { recordMovement, stockCount } from "@/lib/stock";
+import { applyReceiptCost, applyOutgoingCost } from "@/lib/costing";
 import { fdNum, fdStr } from "@/lib/admin-utils";
 
 const UNITS = ["g", "kg", "ml", "l", "pcs"] as const;
@@ -146,7 +147,7 @@ export async function addMovement(fd: FormData) {
   } else {
     if (amount <= 0) throw new Error("რაოდენობა ნულზე მეტი უნდა იყოს");
     // ჩამოწერა ყოველთვის მინუსია — ნიშანს მომხმარებელს არ ვაწერინებთ
-    await recordMovement({
+    const mv = await recordMovement({
       locationId,
       itemId,
       type: kind === "waste" ? "waste" : "receipt",
@@ -154,6 +155,17 @@ export async function addMovement(fd: FormData) {
       note: fdStr(fd, "note") || null,
       employeeId: s.sub,
     });
+
+    // ── თვითღირებულება ──
+    if (kind === "waste") {
+      // ჩამოწერა მიმდინარე საშუალოთი ფასდება; საშუალო არ იცვლება
+      await applyOutgoingCost(locationId, itemId, amount, mv.id);
+    } else {
+      const unitCost = fdNum(fd, "unitCost");
+      if (unitCost !== null && unitCost > 0) {
+        await applyReceiptCost(locationId, itemId, amount, unitCost, mv.id);
+      }
+    }
   }
 
   revalidatePath("/admin/stock");

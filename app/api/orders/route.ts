@@ -4,6 +4,7 @@ import { getMenu } from "@/lib/menu-db";
 import { priceOrder, type CartLineIn } from "@/lib/order-pricing";
 import { computeConsumption, locationForBranch } from "@/lib/consumption";
 import { recordMovements } from "@/lib/stock";
+import { applyOutgoingCost } from "@/lib/costing";
 import { notifyNewOrder } from "@/lib/telegram";
 
 export const runtime = "nodejs";
@@ -157,7 +158,7 @@ export async function POST(req: Request) {
       if (loc) {
         const used = await computeConsumption(priced.items);
         if (used.length > 0) {
-          await recordMovements(
+          const created = await recordMovements(
             used.map((u) => ({
               locationId: loc.id,
               itemId: u.itemId,
@@ -168,6 +169,11 @@ export async function POST(req: Request) {
               note: `შეკვეთა #${order.orderNo}`,
             })),
           );
+
+          // ჩამოწერის ღირებულება მიმდინარე საშუალოთი — რეპორტისთვის
+          for (const [i, m] of created.entries()) {
+            await applyOutgoingCost(loc.id, used[i].itemId, used[i].qty, m.id);
+          }
         }
       } else {
         console.warn(`order: ფილიალს ${branch.id} საწყობის ლოკაცია არ აქვს — ჩამოწერა გამოტოვდა`);

@@ -166,6 +166,8 @@ model Branch {
 
   stockLocation StockLocation?
 
+  branchCombos BranchCombo[]
+
   @@index([orgId, active, sortOrder])
   @@index([deletedAt])
 }
@@ -405,6 +407,8 @@ model Combo {
 
   // არქივი: არაფერი იშლება ფიზიკურად — deletedAt ივსება და სიებიდან ქრება
   deletedAt DateTime?
+
+  branchCombos BranchCombo[]
 
   @@index([active, sortOrder])
   @@index([deletedAt])
@@ -1132,4 +1136,27 @@ model ProductionLine {
   item  StockItem       @relation(fields: [itemId], references: [id])
 
   @@unique([productionOrderId, itemId])
+}
+
+
+/// კომბოს მდგომარეობა კონკრეტულ ფილიალში.
+/// ჩანაწერის არარსებობა = ხელმისაწვდომია (ნაგულისხმევი) — იგივე წესი, რაც BranchProduct-ში.
+model BranchCombo {
+  id       String @id @default(cuid())
+  branchId String
+  comboId  String
+
+  /// false = ამ ფილიალში დროებით არ იყიდება
+  available Boolean @default(true)
+
+  note      String?
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  combo  Combo  @relation(fields: [comboId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, comboId])
+  @@index([comboId, available])
+  @@index([branchId, available])
 }
