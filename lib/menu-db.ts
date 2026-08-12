@@ -59,6 +59,7 @@ export async function getMenu(): Promise<MenuPayload> {
           orderBy: { sortOrder: "asc" },
           include: { options: { include: { product: true } } },
         },
+        branchCombos: true,
       },
     }),
     db.branch.findMany({ where: { deletedAt: null, active: true }, orderBy: { sortOrder: "asc" } }),
@@ -74,6 +75,12 @@ export async function getMenu(): Promise<MenuPayload> {
     return off < branchCount;
   };
   products = products.filter(soldSomewhere);
+  // იგივე წესი კომბოებზე — ყველგან გამორთული საიტზე არ ჩანს
+  combos = combos.filter((c) => {
+    if (branchCount === 0) return true;
+    const off = c.branchCombos.filter((bc) => !bc.available).length;
+    return off < branchCount;
+  });
 
   const set = Object.fromEntries(settings.map((s) => [s.key, s.value])) as Record<string, Json>;
   const order = (set.order && typeof set.order === "object" ? set.order : {}) as Record<string, unknown>;

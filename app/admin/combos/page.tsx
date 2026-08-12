@@ -10,11 +10,12 @@ export default async function CombosPage({
   searchParams: Promise<{ saved?: string; archived?: string }>;
 }) {
   const sp = await searchParams;
+  const branchCount = await db.branch.count({ where: { deletedAt: null } });
 
   const combos = await db.combo.findMany({
     where: { deletedAt: null },
     orderBy: { sortOrder: "asc" },
-    include: { slots: { include: { options: true } } },
+    include: { slots: { include: { options: true } }, branchCombos: true },
   });
 
   return (
@@ -76,6 +77,25 @@ export default async function CombosPage({
                   <span className={c.active ? "badge badge-on" : "badge badge-off"}>
                     {c.active ? "ჩართული" : "გამორთული"}
                   </span>
+                  {(() => {
+                    const off = c.branchCombos.filter((bc) => !bc.available).length;
+                    if (off === 0) return null;
+                    const gone = branchCount > 0 && off >= branchCount;
+                    return (
+                      <div style={{ marginTop: 4 }}>
+                        <span
+                          className="badge"
+                          style={
+                            gone
+                              ? { background: "#fdecea", color: "var(--a-danger)" }
+                              : { background: "#fdf3d6", color: "#8a6a12" }
+                          }
+                        >
+                          {gone ? "არსად არ იყიდება" : `${off} ფილიალში გამორთული`}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </td>
               </tr>
             ))}

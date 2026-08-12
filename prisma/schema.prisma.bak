@@ -845,6 +845,8 @@ model StockLocation {
   transfersOut Transfer[] @relation("TransferFrom")
   transfersIn  Transfer[] @relation("TransferTo")
 
+  productionOrders ProductionOrder[]
+
   @@index([type, active])
   @@index([deletedAt])
 }
@@ -875,6 +877,10 @@ model StockItem {
   consumption ConsumptionRule[]
 
   transferLines TransferLine[]
+
+  recipeOutputs Recipe[]         @relation("RecipeOutput")
+  recipeInputs  RecipeLine[]
+  productionLines ProductionLine[]
 
   @@index([active, category])
   @@index([deletedAt])
@@ -1029,4 +1035,101 @@ model TransferLine {
 
   @@unique([transferId, itemId])
   @@index([itemId])
+}
+
+
+/// წარმოების რეცეპტი: შემავალები → გამოსავალი.
+/// outputQty არის ერთი გატარების შედეგი (მაგ. 100 გუნდა).
+model Recipe {
+  id   String @id @default(cuid())
+  name Json
+
+  outputItemId String
+  outputQty    Decimal @db.Decimal(14, 3)
+
+  note   String?
+  active Boolean @default(true)
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  outputItem StockItem         @relation("RecipeOutput", fields: [outputItemId], references: [id])
+  lines      RecipeLine[]
+  orders     ProductionOrder[]
+
+  @@index([active])
+  @@index([deletedAt])
+}
+
+model RecipeLine {
+  id       String  @id @default(cuid())
+  recipeId String
+  itemId   String
+  qty      Decimal @db.Decimal(14, 3)
+  note     String?
+
+  recipe Recipe    @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  item   StockItem @relation(fields: [itemId], references: [id])
+
+  @@unique([recipeId, itemId])
+}
+
+enum ProductionStatus {
+  in_progress /// დაწყებულია — მარაგი ჯერ არ შეცვლილა
+  done        /// დასრულდა — ნედლეული ჩამოიწერა, პროდუქტი დაემატა
+  cancelled
+}
+
+/// ერთი პარტია — რეცეპტის N-ჯერ გატარება კონკრეტულ ლოკაციაზე.
+model ProductionOrder {
+  id String @id @default(cuid())
+  no Int    @unique @default(autoincrement())
+
+  recipeId   String
+  locationId String
+
+  /// რამდენჯერ ტარდება რეცეპტი (4 × 100 = 400 გუნდა)
+  batches    Decimal  @db.Decimal(14, 3)
+  /// batches × recipe.outputQty
+  plannedQty Decimal  @db.Decimal(14, 3)
+  /// ფაქტობრივად რამდენი გამოვიდა
+  actualQty  Decimal? @db.Decimal(14, 3)
+
+  status ProductionStatus @default(in_progress)
+  note   String?
+
+  startedById   String?
+  finishedById  String?
+  cancelledById String?
+
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  cancelledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipe   Recipe           @relation(fields: [recipeId], references: [id])
+  location StockLocation    @relation(fields: [locationId], references: [id])
+  lines    ProductionLine[]
+
+  @@index([status, startedAt])
+  @@index([locationId, status])
+}
+
+/// ნედლეულის ასლი პარტიის მომენტისთვის — რეცეპტის მერე შეცვლა
+/// ძველ პარტიას არ ცვლის.
+model ProductionLine {
+  id                String @id @default(cuid())
+  productionOrderId String
+  itemId            String
+
+  qtyPlanned Decimal  @db.Decimal(14, 3)
+  qtyUsed    Decimal? @db.Decimal(14, 3)
+
+  order ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  item  StockItem       @relation(fields: [itemId], references: [id])
+
+  @@unique([productionOrderId, itemId])
 }

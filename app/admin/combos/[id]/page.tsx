@@ -30,7 +30,10 @@ export default async function ComboEdit({ params }: { params: Promise<{ id: stri
   const [c, products, branches] = await Promise.all([
     db.combo.findUnique({
       where: { id },
-      include: { slots: { orderBy: { sortOrder: "asc" }, include: { options: true } } },
+      include: {
+        slots: { orderBy: { sortOrder: "asc" }, include: { options: true } },
+        branchCombos: true,
+      },
     }),
     db.product.findMany({
       where: { deletedAt: null },
@@ -44,7 +47,8 @@ export default async function ComboEdit({ params }: { params: Promise<{ id: stri
   const name = i18nOf(c.name);
   const desc = i18nOf(c.description);
   const badge = i18nOf(c.badge);
-  const disabled = new Set(c.disabledBranches);
+  const disabled = new Set(c.branchCombos.filter((bc) => !bc.available).map((bc) => bc.branchId));
+  const goneEverywhere = branches.length > 0 && disabled.size >= branches.length;
 
   const save = updateCombo.bind(null, id);
   const addSlot = addComboSlot.bind(null, id);
@@ -194,6 +198,17 @@ export default async function ComboEdit({ params }: { params: Promise<{ id: stri
         <div className="admin-panel">
           <h2>ხელმისაწვდომობა ფილიალებში</h2>
           <input type="hidden" name="branches_present" value="1" />
+          {goneEverywhere && (
+            <div className="alert alert-error">
+              <b>არცერთ ფილიალში არ იყიდება</b> — ეს კომბო საიტზე საერთოდ არ ჩანს.
+            </div>
+          )}
+          {!goneEverywhere && disabled.size > 0 && (
+            <div className="alert" style={{ background: "#fdf3d6", color: "#8a6a12" }}>
+              გამორთულია {disabled.size} ფილიალში:{" "}
+              {branches.filter((b) => disabled.has(b.id)).map((b) => i18nText(b.name)).join(", ")}
+            </div>
+          )}
           <div style={grid}>
             {branches.map((b) => (
               <label key={b.id} style={cell}>

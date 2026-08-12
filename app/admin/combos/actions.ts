@@ -62,11 +62,9 @@ export async function updateCombo(id: string, fd: FormData) {
   const validFrom = fdStr(fd, "validFrom");
   const validTo = fdStr(fd, "validTo");
 
+  // ფილიალები — ახლა BranchCombo-ში (მასივი აღარ გამოიყენება)
   const allBranches = await db.branch.findMany({ where: { deletedAt: null }, select: { id: true } });
-  const availableIn = fd.getAll("availableIn").map(String);
-  const disabledBranches = fd.get("branches_present")
-    ? allBranches.map((b) => b.id).filter((bid) => !availableIn.includes(bid))
-    : undefined;
+  const availableIn = new Set(fd.getAll("availableIn").map(String));
 
   await db.combo.update({
     where: { id },
@@ -82,9 +80,31 @@ export async function updateCombo(id: string, fd: FormData) {
       sortOrder: fdNum(fd, "sortOrder") ?? 0,
       validFrom: validFrom ? new Date(validFrom) : null,
       validTo: validTo ? new Date(validTo) : null,
-      ...(disabledBranches ? { disabledBranches } : {}),
     },
   });
+
+  // ── ხელმისაწვდომობა ფილიალებში ──
+  if (fd.get("branches_present") !== null) {
+    for (const b of allBranches) {
+      const available = availableIn.has(b.id);
+      const existing = await db.branchCombo.findUnique({
+        where: { branchId_comboId: { branchId: b.id, comboId: id } },
+      });
+      if (!existing) {
+        if (available) continue; // ჩანაწერის არარსებობა = ხელმისაწვდომია
+        await db.branchCombo.create({
+          data: { branchId: b.id, comboId: id, available: false, updatedBy: session.sub },
+        });
+        continue;
+      }
+      if (existing.available !== available) {
+        await db.branchCombo.update({
+          where: { id: existing.id },
+          data: { available, updatedBy: session.sub },
+        });
+      }
+    }
+  }
 
   const slots = await db.comboSlot.findMany({ where: { comboId: id } });
 
