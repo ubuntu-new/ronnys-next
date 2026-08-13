@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
 import { getSession } from "@/lib/admin-auth";
+import { tr } from "@/lib/admin-i18n";
 import { logout } from "./actions";
 import AdminSearch from "./_components/AdminSearch";
 import AlertBell from "./_components/AlertBell";
@@ -12,25 +13,26 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const NAV = [
-  { href: "/admin", label: "დაფა" },
-  { href: "/admin/orders", label: "შეკვეთები" },
-  { href: "/admin/products", label: "პროდუქტები" },
-  { href: "/admin/toppings", label: "ტოპინგები" },
-  { href: "/admin/combos", label: "კომბოები" },
-  { href: "/admin/availability", label: "ხელმისაწვდომობა" },
-  { href: "/admin/categories", label: "კატეგორიები" },
-  { href: "/admin/stock", label: "მარაგი" },
-  { href: "/admin/stock/transfers", label: "გადატანები" },
-  { href: "/admin/stock/production", label: "წარმოება" },
-  { href: "/admin/stock/costing", label: "თვითღირებულება" },
-  { href: "/admin/stock/consumption", label: "ხარჯვის წესები" },
-  { href: "/admin/branches", label: "ფილიალები" },
-  { href: "/admin/employees", label: "თანამშრომლები" },
-  { href: "/admin/discounts", label: "ფასდაკლებები" },
-  { href: "/admin/settings", label: "პარამეტრები" },
-  { href: "/admin/audit", label: "ჟურნალი" },
-  { href: "/admin/archive", label: "არქივი" },
+/** English is the source language; the dictionary maps to Georgian. */
+const NAV: { href: string; label: string }[] = [
+  { href: "/admin", label: "Dashboard" },
+  { href: "/admin/orders", label: "Orders" },
+  { href: "/admin/products", label: "Products" },
+  { href: "/admin/toppings", label: "Toppings" },
+  { href: "/admin/combos", label: "Combos" },
+  { href: "/admin/availability", label: "Availability" },
+  { href: "/admin/categories", label: "Categories" },
+  { href: "/admin/stock", label: "Stock" },
+  { href: "/admin/stock/transfers", label: "Transfers" },
+  { href: "/admin/stock/production", label: "Production" },
+  { href: "/admin/stock/costing", label: "Costing" },
+  { href: "/admin/stock/consumption", label: "Consumption rules" },
+  { href: "/admin/branches", label: "Branches" },
+  { href: "/admin/employees", label: "Staff" },
+  { href: "/admin/discounts", label: "Discounts" },
+  { href: "/admin/settings", label: "Settings" },
+  { href: "/admin/audit", label: "Activity log" },
+  { href: "/admin/archive", label: "Archive" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -38,14 +40,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   if (!session) {
     return (
-      <html lang="ka">
+      <html lang="en">
         <body className="admin-body">{children}</body>
       </html>
     );
   }
 
+  const t = await tr();
+
   return (
-    <html lang="ka">
+    <html lang="en">
       <body className="admin-body">
         <div className="admin-shell">
           <aside className="admin-side">
@@ -56,7 +60,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <nav className="admin-nav">
               {NAV.map((n) => (
                 <Link key={n.href} href={n.href}>
-                  {n.label}
+                  {t(n.label)}
                 </Link>
               ))}
             </nav>
@@ -65,7 +69,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               <br />
               <small>{session.role}</small>
               <form action={logout}>
-                <button type="submit">გასვლა</button>
+                <button type="submit">{t("Sign out")}</button>
               </form>
             </div>
           </aside>

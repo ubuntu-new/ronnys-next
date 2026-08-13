@@ -3,6 +3,9 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/admin-auth";
 import { i18nText } from "@/lib/admin-utils";
 import { fmtQty } from "@/lib/stock";
+import { setupChecklist } from "@/lib/setup-checklist";
+import SetupChecklist from "./_components/SetupChecklist";
+import HelpNote from "./_components/HelpNote";
 import {
   periodOf,
   coreMetrics,
@@ -76,7 +79,7 @@ export default async function Dashboard({
   const days = Math.min(365, Math.max(1, Number(sp.d) || 30));
   const p = periodOf(days);
 
-  const [session, core, costs, labour, products, branches, load, yieldStats, stock, fixed, pending] =
+  const [session, core, costs, labour, products, branches, load, yieldStats, stock, fixed, pending, setup] =
     await Promise.all([
       getSession(),
       coreMetrics(p),
@@ -89,6 +92,7 @@ export default async function Dashboard({
       stockAlerts(),
       fixedCosts(),
       db.order.count({ where: { status: "new" } }),
+      setupChecklist(),
     ]);
 
   // ── ეკონომიკა ──
@@ -111,15 +115,15 @@ export default async function Dashboard({
     <>
       <div className="admin-head">
         <div>
-          <h1>დაფა</h1>
+          <h1>Dashboard</h1>
           <p>
-            {session?.name} · ბოლო {p.label}
+            {session?.name} · last {p.label}
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {[1, 7, 30, 90].map((d) => (
             <Link key={d} className={days === d ? "btn" : "btn btn-ghost"} href={`/admin?d=${d}`}>
-              {d === 1 ? "დღეს" : `${d} დღე`}
+              {d === 1 ? "Today" : `${d} days`}
             </Link>
           ))}
         </div>
@@ -128,51 +132,55 @@ export default async function Dashboard({
       {/* ── საჭიროებს ყურადღებას ── */}
       {(pending > 0 || stock.low > 0) && (
         <div className="admin-panel" style={{ borderColor: "#f0d9a0" }}>
-          <h2>საჭიროებს ყურადღებას</h2>
+          <h2>Needs attention</h2>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {pending > 0 && (
               <Link className="btn" href="/admin/orders?status=new">
-                {pending} დაუმუშავებელი შეკვეთა
+                {pending} new orders
               </Link>
             )}
             {stock.low > 0 && (
               <Link className="btn btn-ghost" href="/admin/stock/replenish">
-                ⚠️ {stock.low} ერთეული ამოწურვის ზღვარზე
+                ⚠️ {stock.low} items low on stock
               </Link>
             )}
           </div>
         </div>
       )}
 
+      {setup.done < setup.total && (
+        <SetupChecklist steps={setup.steps} done={setup.done} total={setup.total} />
+      )}
+
       {noData ? (
         <div className="admin-panel">
-          <h2>ამ პერიოდში შეკვეთა არ ყოფილა</h2>
+          <h2>No orders in this period</h2>
           <p className="hint" style={{ margin: 0 }}>
-            აირჩიე უფრო გრძელი პერიოდი, ან დაელოდე პირველ შეკვეთებს. დაფა კვირებში
-            ხდება სასარგებლო — ერთი დღის ციფრი ტენდენციას ვერ აჩვენებს.
+            Pick a longer period, or wait for the first orders. This page becomes useful
+            over weeks — a single day shows no trend.
           </p>
         </div>
       ) : (
         <>
           {/* ── ბრუნვა ── */}
           <div className="admin-stats">
-            <Stat value={`${money(core.revenue)} ₾`} label="ბრუნვა" sub={`${money(core.perDay)} ₾ / დღე`} />
-            <Stat value={String(core.count)} label="შეკვეთა" sub={`წინა პერიოდი: ${core.prevCount}`} />
-            <Stat value={`${money(core.avgCheck)} ₾`} label="საშუალო ჩეკი" />
+            <Stat value={`${money(core.revenue)} ₾`} label="Revenue" sub={`${money(core.perDay)} ₾ / day`} />
+            <Stat value={String(core.count)} label="Orders" sub={`previous: ${core.prevCount}`} />
+            <Stat value={`${money(core.avgCheck)} ₾`} label="Average check" />
             <Stat
               value={grossProfit >= 0 ? `${money(grossProfit)} ₾` : `−${money(-grossProfit)} ₾`}
-              label="მთლიანი მოგება"
-              sub="ინგრედიენტების გამოკლებით"
+              label="Gross profit"
+              sub="after ingredients"
               tone={grossProfit >= 0 ? "ok" : "bad"}
             />
             {core.deliveryShare !== null && (
-              <Stat value={`${core.deliveryShare}%`} label="მიწოდება" sub="დანარჩენი — წაღება" />
+              <Stat value={`${core.deliveryShare}%`} label="Delivery" sub="rest is pickup" />
             )}
             {core.growth !== null && (
               <Stat
                 value={`${core.growth > 0 ? "+" : ""}${core.growth}%`}
-                label="ზრდა"
-                sub={`წინა ${p.label}-თან`}
+                label="Growth"
+                sub={`vs previous ${p.label}`}
                 tone={core.growth >= 0 ? "ok" : "bad"}
               />
             )}
@@ -180,11 +188,11 @@ export default async function Dashboard({
 
           {/* ── ეკონომიკა ── */}
           <div className="admin-panel">
-            <h2>ეკონომიკა</h2>
+            <h2>Economics</h2>
             <table className="admin-table">
               <tbody>
                 <tr>
-                  <td style={{ width: 260 }}>ბრუნვა</td>
+                  <td style={{ width: 260 }}>Revenue</td>
                   <td style={{ width: 140 }}>
                     <b>{money(core.revenue)} ₾</b>
                   </td>
@@ -193,7 +201,7 @@ export default async function Dashboard({
                   </td>
                 </tr>
                 <tr>
-                  <td>ინგრედიენტები (COGS)</td>
+                  <td>Ingredients (COGS)</td>
                   <td>−{money(costs.cogs)} ₾</td>
                   <td>
                     {foodCostPct !== null && (
@@ -208,11 +216,11 @@ export default async function Dashboard({
                         {foodCostPct}%
                       </span>
                     )}
-                    <span className="hint"> · ნორმა 28–33%</span>
+                    <span className="hint"> · target 28–33%</span>
                   </td>
                 </tr>
                 <tr>
-                  <td>შრომა</td>
+                  <td>Labour</td>
                   <td>−{money(labour.cost)} ₾</td>
                   <td>
                     {labourPct !== null && (
@@ -229,8 +237,8 @@ export default async function Dashboard({
                     )}
                     <span className="hint">
                       {" "}
-                      · {labour.hours} სთ, {labour.shifts} ცვლა
-                      {labour.unpriced > 0 && ` · ${labour.unpriced} ცვლას განაკვეთი აკლია`}
+                      · {labour.hours} h, {labour.shifts} shifts
+                      {labour.unpriced > 0 && ` · ${labour.unpriced} shifts without a rate`}
                     </span>
                   </td>
                 </tr>
@@ -254,23 +262,23 @@ export default async function Dashboard({
                         {primePct}%
                       </span>
                     )}
-                    <span className="hint"> · ჯანსაღი რესტორანი ≤ 65%</span>
+                    <span className="hint"> · healthy ≤ 65%</span>
                   </td>
                 </tr>
                 {costs.waste > 0 && (
                   <tr>
-                    <td>ჩამოწერა (გაფუჭდა)</td>
+                    <td>Waste</td>
                     <td style={{ color: "var(--a-danger)" }}>−{money(costs.waste)} ₾</td>
                     <td>
                       <span className="hint">
-                        {pct(costs.waste, core.revenue)}% ბრუნვისა
+                        {pct(costs.waste, core.revenue)}% of revenue
                       </span>
                     </td>
                   </tr>
                 )}
                 {costs.countAdjust !== 0 && (
                   <tr>
-                    <td>ინვენტარიზაციის სხვაობა</td>
+                    <td>Stock count variance</td>
                     <td style={{ color: costs.countAdjust < 0 ? "var(--a-danger)" : undefined }}>
                       {costs.countAdjust > 0 ? "+" : ""}
                       {money(costs.countAdjust)} ₾
@@ -278,8 +286,8 @@ export default async function Dashboard({
                     <td>
                       <span className="hint">
                         {costs.countAdjust < 0
-                          ? "დანაკლისი — გადაჭარბებული პორცია, გაფუჭება ან ქურდობა"
-                          : "ნამეტი — დათვლის შეცდომა ან აღურიცხავი მიღება"}
+                          ? "Shortage — over-portioning, spoilage or theft"
+                          : "Surplus — a counting error or an unrecorded receipt"}
                       </span>
                     </td>
                   </tr>
@@ -287,15 +295,15 @@ export default async function Dashboard({
                 {fixedForPeriod !== null ? (
                   <>
                     <tr>
-                      <td>ფიქსირებული ხარჯი</td>
+                      <td>Fixed costs</td>
                       <td>−{money(fixedForPeriod)} ₾</td>
                       <td>
-                        <span className="hint">{money(fixed!.monthly)} ₾/თვე პროპორციულად</span>
+                        <span className="hint">{money(fixed!.monthly)} ₾/month, pro-rated</span>
                       </td>
                     </tr>
                     <tr style={{ borderTop: "2px solid var(--a-line)" }}>
                       <td>
-                        <b>სუფთა მოგება</b>
+                        <b>Net profit</b>
                       </td>
                       <td>
                         <b style={{ color: netProfit! >= 0 ? "var(--a-ok)" : "var(--a-danger)" }}>
@@ -304,7 +312,7 @@ export default async function Dashboard({
                         </b>
                       </td>
                       <td>
-                        <span className="hint">{pct(netProfit!, core.revenue)}% ბრუნვისა</span>
+                        <span className="hint">{pct(netProfit!, core.revenue)}% of revenue</span>
                       </td>
                     </tr>
                   </>
@@ -312,8 +320,8 @@ export default async function Dashboard({
                   <tr>
                     <td colSpan={3}>
                       <span className="hint">
-                        სუფთა მოგება არ ჩანს — ქირა და კომუნალური არ არის შეყვანილი.{" "}
-                        <Link href="/admin/settings">დაამატე პარამეტრებში →</Link>
+                        Net profit is hidden — rent and utilities haven't been entered.{" "}
+                        <Link href="/admin/settings">Add them in Settings →</Link>
                       </span>
                     </td>
                   </tr>
@@ -323,8 +331,7 @@ export default async function Dashboard({
 
             {costs.cogs === 0 && (
               <div className="alert" style={{ background: "#fdf3d6", color: "#8a6a12", marginTop: 14 }}>
-                <b>ინგრედიენტების ღირებულება ნულია.</b> ან ხარჯვის წესები არ არის, ან მიღებებს
-                ფასი აკლია. <Link href="/admin/stock/consumption/bulk">შეავსე წესები →</Link>
+                <b>Ingredient cost is zero.</b> Either consumption rules are missing, or receipts have no price. <Link href="/admin/stock/consumption/bulk">Fill in the rules →</Link>
               </div>
             )}
           </div>
@@ -332,14 +339,14 @@ export default async function Dashboard({
           {/* ── ფილიალები ── */}
           {branches.length > 1 && (
             <div className="admin-panel">
-              <h2>ფილიალები</h2>
+              <h2>Branches</h2>
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>ფილიალი</th>
-                    <th style={{ width: 90 }}>შეკვეთა</th>
-                    <th style={{ width: 130 }}>ბრუნვა</th>
-                    <th style={{ width: 120 }}>საშ. ჩეკი</th>
+                    <th>Branch</th>
+                    <th style={{ width: 90 }}>Orders</th>
+                    <th style={{ width: 130 }}>Revenue</th>
+                    <th style={{ width: 120 }}>Avg check</th>
                     <th style={{ width: 200 }}></th>
                   </tr>
                 </thead>
@@ -364,10 +371,9 @@ export default async function Dashboard({
 
           {/* ── საათობრივი დატვირთვა ── */}
           <div className="admin-panel">
-            <h2>საათობრივი დატვირთვა</h2>
+            <h2>Hourly load</h2>
             <p className="hint" style={{ marginTop: -8, marginBottom: 14 }}>
-              პიკი <b>{load.peak.hour}:00</b> — {load.peak.count} შეკვეთა. ცვლების გრაფიკი ამ
-              რიცხვებს უნდა მიჰყვებოდეს.
+              Peak at <b>{load.peak.hour}:00</b> — {load.peak.count} orders. Staff rotas should follow this shape.
             </p>
             <table className="admin-table">
               <tbody>
@@ -393,13 +399,13 @@ export default async function Dashboard({
 
           {/* ── პროდუქტები ── */}
           <div className="admin-panel">
-            <h2>ტოპ პროდუქტები</h2>
+            <h2>Top products</h2>
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>პროდუქტი</th>
-                  <th style={{ width: 90 }}>ცალი</th>
-                  <th style={{ width: 130 }}>ბრუნვა</th>
+                  <th>Product</th>
+                  <th style={{ width: 90 }}>Qty</th>
+                  <th style={{ width: 130 }}>Revenue</th>
                 </tr>
               </thead>
               <tbody>
@@ -421,24 +427,24 @@ export default async function Dashboard({
               </tbody>
             </table>
             <p className="hint" style={{ marginTop: 12 }}>
-              ⚠️ ყველაზე გაყიდვადი ხშირად ყველაზე ნაკლებმომგებიანია —{" "}
-              <Link href="/admin/stock/costing">ნახე მოგება პროდუქტზე →</Link>
+              ⚠️ The best seller is often the least profitable —{" "}
+              <Link href="/admin/stock/costing">see margin per product →</Link>
             </p>
           </div>
 
           {/* ── წარმოება ── */}
           {yieldStats && (
             <div className="admin-panel">
-              <h2>წარმოების გამოსავალი</h2>
+              <h2>Production yield</h2>
               <div className="admin-stats" style={{ marginBottom: 0 }}>
-                <Stat value={String(yieldStats.batches)} label="პარტია" />
-                <Stat value={money(yieldStats.planned)} label="დაგეგმილი" />
-                <Stat value={money(yieldStats.actual)} label="ფაქტობრივი" />
+                <Stat value={String(yieldStats.batches)} label="Batches" />
+                <Stat value={money(yieldStats.planned)} label="Planned" />
+                <Stat value={money(yieldStats.actual)} label="Actual" />
                 <Stat
                   value={`${yieldStats.pct}%`}
-                  label="გამოსავალი"
+                  label="Yield"
                   tone={yieldStats.pct! >= 95 ? "ok" : "bad"}
-                  sub={yieldStats.pct! < 95 ? "რეცეპტი ან დანაკარგი" : undefined}
+                  sub={yieldStats.pct! < 95 ? "recipe drift or loss" : undefined}
                 />
               </div>
             </div>
@@ -448,12 +454,12 @@ export default async function Dashboard({
 
       {/* ── მარაგი ── */}
       <div className="admin-panel">
-        <h2>მარაგი</h2>
+        <h2>Stock</h2>
         <div className="admin-stats" style={{ marginBottom: stock.items.length ? 14 : 0 }}>
-          <Stat value={`${money(stock.stockValue)} ₾`} label="მარაგის ღირებულება" />
+          <Stat value={`${money(stock.stockValue)} ₾`} label="Stock value" />
           <Stat
             value={String(stock.low)}
-            label="ამოწურვის ზღვარზე"
+            label="Low on stock"
             tone={stock.low > 0 ? "warn" : "ok"}
           />
         </div>
@@ -479,23 +485,19 @@ export default async function Dashboard({
       </div>
 
       <div className="admin-panel">
-        <h2>რას ნიშნავს ეს რიცხვები</h2>
+        <h2>What these numbers mean</h2>
         <ul style={{ margin: 0, paddingLeft: 20, fontSize: 14, lineHeight: 1.8, color: "var(--a-muted)" }}>
           <li>
-            <b>Food cost 28–33%</b> — რესტორნის ნორმა. თუ მაღალია, ან ფასი დაბალია, ან პორცია
-            დიდი, ან დანაკარგია.
+            <b>Food cost 28–33%</b> — the restaurant norm. Higher means prices are low, portions are large, or something is being lost.
           </li>
           <li>
-            <b>Prime cost ≤ 65%</b> — ინგრედიენტები + შრომა. ეს ერთი რიცხვი ყველაზე მეტს ამბობს
-            რესტორნის ჯანმრთელობაზე.
+            <b>Prime cost ≤ 65%</b> — ingredients plus labour. This single number says more about a restaurant's health than revenue does.
           </li>
           <li>
-            <b>ინვენტარიზაციის სხვაობა</b> — ის, რაც ჩუმად ჭამს მოგებას. ბრუნვა ყველამ იცის;
-            ეს რიცხვი — არავინ.
+            <b>Stock count variance</b> — what quietly eats the profit. Everyone watches revenue; almost nobody watches this.
           </li>
           <li>
-            <b>მთლიანი მოგება ≠ სუფთა მოგება.</b> აქ არ შედის საბანკო საკომისიო, გადასახადები
-            და ამორტიზაცია — რეალური მოგება ამაზე დაბალია.
+            <b>Gross profit is not net profit.</b> Bank fees, taxes and depreciation are not included — the real figure is lower.
           </li>
         </ul>
       </div>

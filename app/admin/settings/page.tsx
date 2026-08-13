@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { getSession } from "@/lib/admin-auth";
 import {
   saveOrderSettings,
   saveLoyaltySettings,
@@ -8,6 +9,7 @@ import {
   saveSocial,
   saveTelegram,
   saveFixedCosts,
+  saveAdminLanguage,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -32,9 +34,11 @@ export default async function SettingsPage({
 }) {
   const sp = await searchParams;
 
+  const session = await getSession();
   const rows = await db.setting.findMany();
   const map = Object.fromEntries(rows.map((r) => [r.key, r.value])) as Record<string, unknown>;
 
+  const lang = obj(map.adminLanguage);
   const order = obj(map.order);
   const loyalty = obj(map.loyalty);
   const emp = obj(map.employeeDiscount);
@@ -56,6 +60,34 @@ export default async function SettingsPage({
       </div>
 
       {sp.saved && <div className="alert alert-ok">შენახულია: {sp.saved}</div>}
+
+      {/* language */}
+      <form className="admin-panel admin-form" action={saveAdminLanguage} style={{ maxWidth: "none" }}>
+        <h2>Interface language</h2>
+        {session?.role === "super_admin" ? (
+          <>
+            <p className="hint" style={{ marginTop: -8 }}>
+              English is the source language — new screens appear in English first.
+              Changing this affects every admin user.
+            </p>
+            <div className="field" style={{ maxWidth: 320 }}>
+              <label htmlFor="lang">Language</label>
+              <select id="lang" name="lang" defaultValue={String(lang.lang ?? "en")}>
+                <option value="en">English</option>
+                <option value="ka">ქართული</option>
+              </select>
+            </div>
+            <div className="form-actions">
+              <button className="btn" type="submit">Save</button>
+            </div>
+          </>
+        ) : (
+          <p className="hint" style={{ margin: 0 }}>
+            Current: <b>{String(lang.lang ?? "en") === "ka" ? "ქართული" : "English"}</b> — only a
+            super admin can change this.
+          </p>
+        )}
+      </form>
 
       {/* ── შეკვეთა ── */}
       <form className="admin-panel admin-form" action={saveOrderSettings} style={{ maxWidth: "none" }}>

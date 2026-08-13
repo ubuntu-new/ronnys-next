@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { clearLangCache } from "@/lib/admin-i18n";
+import { getSession } from "@/lib/admin-auth";
 import { requirePermission } from "@/lib/admin-auth";
 import { fdBool, fdNum, fdStr } from "@/lib/admin-utils";
 
@@ -136,4 +138,18 @@ export async function saveFixedCosts(fd: FormData) {
     s.sub,
   );
   redirect("/admin/settings?saved=fixedCosts");
+}
+
+/** ინტერფეისის ენა — მხოლოდ super_admin ცვლის. */
+export async function saveAdminLanguage(fd: FormData) {
+  const session = await getSession();
+  if (session?.role !== "super_admin") {
+    throw new Error("Only a super admin can change the interface language");
+  }
+
+  const lang = fdStr(fd, "lang") === "ka" ? "ka" : "en";
+  await put("adminLanguage", { lang }, session.sub);
+  clearLangCache();
+
+  redirect("/admin/settings?saved=language");
 }
