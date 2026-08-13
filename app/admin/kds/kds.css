@@ -1,0 +1,127 @@
+/* Kitchen display — its own stylesheet on purpose.
+   Shared admin.css is edited by several patches; a kitchen screen must not
+   break because a form somewhere else changed. */
+
+.kds {
+  margin: -10px -4px 0;
+  font-size: 16px;
+}
+
+.kds-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+}
+.kds-top b { font-size: 22px; }
+.kds-count {
+  margin-left: 10px;
+  font-size: 14px;
+  color: var(--a-muted);
+}
+.kds-top-actions { display: flex; gap: 8px; align-items: center; }
+.kds-top-actions button {
+  border: 1px solid var(--a-line);
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.kds-error { color: var(--a-danger); font-size: 14px; }
+
+.kds-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .kds-cols { grid-template-columns: 1fr; }
+}
+
+.kds-col > h2 {
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--a-muted);
+  margin: 0 0 10px;
+}
+.kds-col > h2 span {
+  background: #f0efed;
+  border-radius: 10px;
+  padding: 1px 8px;
+  margin-left: 6px;
+  font-size: 13px;
+}
+.kds-empty { color: var(--a-muted); }
+
+.kds-card {
+  background: #fff;
+  border: 1px solid var(--a-line);
+  border-left: 5px solid var(--a-line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.kds-fresh { border-left-color: #3f7d3f; }
+.kds-warn  { border-left-color: #d9a441; background: #fffdf6; }
+.kds-late  { border-left-color: var(--a-danger); background: #fffaf9; }
+
+.kds-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.kds-card header b { font-size: 26px; }
+.kds-time { font-size: 20px; font-weight: 600; }
+.kds-late .kds-time { color: var(--a-danger); }
+.kds-warn .kds-time { color: #8a6a12; }
+
+.kds-meta { font-size: 13px; color: var(--a-muted); margin-top: 2px; }
+
+.kds-items { list-style: none; margin: 12px 0 0; padding: 0; }
+.kds-items li {
+  display: flex;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid #f2f1ef;
+  font-size: 18px;
+  line-height: 1.35;
+}
+.kds-qty { font-weight: 700; min-width: 32px; }
+.kds-items em {
+  display: block;
+  font-style: normal;
+  font-size: 14px;
+  color: var(--a-orange);
+  margin-top: 2px;
+}
+
+.kds-note {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  background: #fdf3d6;
+  color: #8a6a12;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+.kds-card footer { margin-top: 12px; }
+.kds-card footer button {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: var(--a-orange);
+  color: #fff;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  padding: 12px;
+  cursor: pointer;
+}
+.kds-card footer button:active { transform: translateY(1px); }
+.kds-done { background: #3f7d3f !important; }
