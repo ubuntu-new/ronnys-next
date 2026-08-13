@@ -52,6 +52,9 @@ export default async function OrdersPage({
             {orders.length} ნაჩვენები · ახალი {countOf("new")} · მზადდება {countOf("preparing")}
           </p>
         </div>
+        <Link className="btn" href="/admin/orders/new">
+          + New order
+        </Link>
       </div>
 
       <div className="admin-panel">

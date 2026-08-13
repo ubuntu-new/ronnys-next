@@ -34,14 +34,18 @@ interface Rules {
   byProduct: Map<string, Rule[]>;
   byTopping: Map<string, Rule[]>;
   toppingIdByName: Map<string, string>;
+  /// productId → მისი რეცეპტის ტოპინგების id-ები
+  baseIngredients: Map<string, string[]>;
 }
 
 async function loadRules(): Promise<Rules> {
-  const [rules, toppings] = await Promise.all([
+  const [rules, toppings, recipes] = await Promise.all([
     db.consumptionRule.findMany({
       select: { itemId: true, qty: true, sizeKey: true, productId: true, toppingId: true },
     }),
     db.topping.findMany({ where: { deletedAt: null }, select: { id: true, name: true } }),
+    // პიცის რეცეპტი — რა ტოპინგები აქვს ნაგულისხმევად
+    db.productTopping.findMany({ select: { productId: true, toppingId: true } }),
   ]);
 
   const byProduct = new Map<string, Rule[]>();
@@ -68,7 +72,14 @@ async function loadRules(): Promise<Rules> {
     if (en) toppingIdByName.set(en, t.id);
   }
 
-  return { byProduct, byTopping, toppingIdByName };
+  const baseIngredients = new Map<string, string[]>();
+  for (const r of recipes) {
+    const list = baseIngredients.get(r.productId) ?? [];
+    list.push(r.toppingId);
+    baseIngredients.set(r.productId, list);
+  }
+
+  return { byProduct, byTopping, toppingIdByName, baseIngredients };
 }
 
 /** ზომაზე მორგებული წესები: კონკრეტული ზომა უპირატესია ზოგადზე. */
@@ -93,21 +104,60 @@ function sizeKeyOf(cfg: Cfg): string | null {
   return i !== null && i >= 0 && i < SIZE_KEYS.length ? SIZE_KEYS[i] : null;
 }
 
-/** ტოპინგების ხარჯი — ზონები გათვალისწინებული, მოხსნილები გამოკლებული. */
-function addToppings(acc: Map<string, number>, R: Rules, cfg: Cfg, size: string | null, factor: number) {
+/**
+ * ტოპინგების ხარჯი.
+ *
+ * ⚠️ ორი წყარო ერთდება:
+ *   1. **პროდუქტის რეცეპტი** — ის, რაც პიცას ისედაც აქვს (მოცარელა, პეპერონი)
+ *   2. **კალათაში დამატებული** — ის, რაც კლიენტმა ზემოდან დაამატა
+ *
+ * მოხსნილი (`removed`) რეცეპტიდან აკლდება.
+ *
+ * ადრე მხოლოდ (2) იკითხებოდა, ამიტომ ჩვეულებრივი პიცის გაყიდვაზე
+ * არაფერი ჩამოიწერებოდა — ეს ბაგი food cost-ს რეალურზე დაბალს აჩვენებდა.
+ */
+function addToppings(
+  acc: Map<string, number>,
+  R: Rules,
+  cfg: Cfg,
+  size: string | null,
+  factor: number,
+  productId?: string | null,
+) {
   const state = (cfg.toppings ?? {}) as Record<string, { whole?: number; left?: number; right?: number }>;
   const removed = (cfg.removed ?? {}) as Record<string, boolean>;
 
+  // ტოპინგის id → რამდენი ერთეული იხარჯება
+  const units = new Map<string, number>();
+
+  // (1) რეცეპტი
+  if (productId) {
+    const removedIds = new Set(
+      Object.keys(removed)
+        .filter((n) => removed[n])
+        .map((n) => R.toppingIdByName.get(n))
+        .filter((x): x is string => !!x),
+    );
+    for (const tid of R.baseIngredients.get(productId) ?? []) {
+      if (removedIds.has(tid)) continue;
+      units.set(tid, (units.get(tid) ?? 0) + 1);
+    }
+  }
+
+  // (2) კალათაში დამატებული
   for (const [name, z] of Object.entries(state)) {
     if (removed[name]) continue;
     const tid = R.toppingIdByName.get(name);
     if (!tid) continue;
 
-    const units = (z.whole || 0) + 0.5 * (z.left || 0) + 0.5 * (z.right || 0);
-    if (units <= 0) continue;
+    const u = (z.whole || 0) + 0.5 * (z.left || 0) + 0.5 * (z.right || 0);
+    if (u <= 0) continue;
+    units.set(tid, (units.get(tid) ?? 0) + u);
+  }
 
+  for (const [tid, u] of units) {
     for (const r of pick(R.byTopping.get(tid), size)) {
-      add(acc, r.itemId, r.qty * units * factor);
+      add(acc, r.itemId, r.qty * u * factor);
     }
   }
 }
@@ -132,7 +182,7 @@ export async function computeConsumption(items: PricedItem[]): Promise<Consumpti
     if (it.kind === "pizza") {
       const size = sizeKeyOf(cfg);
       for (const r of pick(R.byProduct.get(it.refId ?? ""), size)) add(acc, r.itemId, r.qty * qty);
-      addToppings(acc, R, cfg, size, qty);
+      addToppings(acc, R, cfg, size, qty, it.refId);
       continue;
     }
 
@@ -142,11 +192,15 @@ export async function computeConsumption(items: PricedItem[]): Promise<Consumpti
       for (const key of ["leftId", "rightId"] as const) {
         const legacy = cfg[key];
         if (typeof legacy !== "number") continue;
-        for (const r of pick(R.byProduct.get(`pizza-${legacy}`), size)) {
+        const pid = `pizza-${legacy}`;
+        for (const r of pick(R.byProduct.get(pid), size)) {
           add(acc, r.itemId, r.qty * 0.5 * qty);
         }
+        // თითოეული ნახევრის რეცეპტი — ნახევარი ულუფით
+        addToppings(acc, R, { removed: cfg.removed }, size, 0.5 * qty, pid);
       }
-      addToppings(acc, R, cfg, size, qty);
+      // კალათაში დამატებული ტოპინგები — ერთხელ, ზონების მიხედვით
+      addToppings(acc, R, { toppings: cfg.toppings, removed: cfg.removed }, size, qty);
       continue;
     }
 
@@ -156,6 +210,10 @@ export async function computeConsumption(items: PricedItem[]): Promise<Consumpti
         const target = refToProductId(ref);
         if (!target) continue;
         for (const r of pick(R.byProduct.get(target.id), target.size)) add(acc, r.itemId, r.qty * qty);
+        // კომბოში პიცა თავისი რეცეპტით მოდის
+        if (target.id.startsWith("pizza-")) {
+          addToppings(acc, R, {}, target.size, qty, target.id);
+        }
       }
       continue;
     }

@@ -1,86 +1,47 @@
-"use server";
+// scripts/patch-manual-order.mjs
+//
+// ხელით შეკვეთის შექმნა — ტელეფონით ან ადგილზე მისული.
+//
+//  1. orders/actions.ts — createManualOrder
+//  2. orders/page.tsx — „+ New order" ღილაკი
+//
+// ⚠️ ფასს იმავე `priceOrder()` ითვლის, რასაც საიტი. ხელით შეყვანილი
+//    ჯამი განზრახ არ არსებობს — ტელეფონის შეკვეთა და საიტის შეკვეთა
+//    ვერასდროს დაშორდება ერთმანეთს.
+//
+// იდემპოტენტურია.
 
-import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
-import { requirePermission, getSession } from "@/lib/admin-auth";
-import { recordMovements } from "@/lib/stock";
+import { readFileSync, writeFileSync, copyFileSync, existsSync } from "node:fs";
+
+const skip = [];
+
+// ── 1) actions ──
+{
+  const F = "app/admin/orders/actions.ts";
+  if (!existsSync(F)) { console.error(`ვერ ვიპოვე ${F}`); process.exit(1); }
+  let s = readFileSync(F, "utf8");
+
+  if (s.includes("createManualOrder")) {
+    skip.push("actions");
+  } else {
+    copyFileSync(F, F + ".bak");
+
+    s = s.replace(
+      'import { recordMovements } from "@/lib/stock";',
+      `import { recordMovements } from "@/lib/stock";
 import { redirect } from "next/navigation";
 import { getMenu } from "@/lib/menu-db";
 import { priceOrder, type CartLineIn } from "@/lib/order-pricing";
 import { computeConsumption, locationForBranch } from "@/lib/consumption";
 import { applyOutgoingCost } from "@/lib/costing";
-import { logAction } from "@/lib/audit";
+import { logAction } from "@/lib/audit";`,
+    );
 
-const FLOW = ["new", "confirmed", "preparing", "ready", "delivering", "completed", "cancelled"] as const;
-type Status = (typeof FLOW)[number];
-
-export async function setOrderStatus(id: string, status: string) {
-  // გაუქმება ცალკე უფლებაა — შემთხვევით დაჭერა ძვირი ჯდება
-  const perm = status === "cancelled" ? "can_void" : "can_view_reports";
-  await requirePermission(perm);
-  const session = await getSession();
-
-  if (!(FLOW as readonly string[]).includes(status)) throw new Error("უცნობი სტატუსი");
-
-  const order = await db.order.findUnique({ where: { id }, select: { statusHistory: true, status: true } });
-  if (!order) throw new Error("შეკვეთა ვერ მოიძებნა");
-  if (order.status === "completed" || order.status === "cancelled") {
-    throw new Error("დასრულებული ან გაუქმებული შეკვეთის სტატუსი აღარ იცვლება");
-  }
-
-  const history = Array.isArray(order.statusHistory) ? (order.statusHistory as unknown[]) : [];
-
-  await db.order.update({
-    where: { id },
-    data: {
-      status: status as Status,
-      statusHistory: [
-        ...history,
-        { status, at: new Date().toISOString(), by: session?.name ?? session?.sub ?? "admin" },
-      ] as object,
-      ...(status === "completed" ? { deliveredAt: new Date() } : {}),
-    },
-  });
-
-  // გაუქმებისას ჩამოწერილი მარაგი ბრუნდება — უკუ-მოძრაობით, არა წაშლით
-  if (status === "cancelled") {
-    const moves = await db.stockMovement.findMany({
-      where: { refType: "Order", refId: id, type: "sale" },
-      select: { locationId: true, itemId: true, qty: true },
-    });
-    if (moves.length > 0) {
-      await recordMovements(
-        moves.map((m) => ({
-          locationId: m.locationId,
-          itemId: m.itemId,
-          type: "count_adjust" as const,
-          qty: Number(m.qty) * -1,
-          refType: "Order",
-          refId: id,
-          note: "შეკვეთის გაუქმება — მარაგი დაბრუნდა",
-          employeeId: session?.sub ?? null,
-        })),
-      );
-    }
-  }
-
-  await db.auditLog.create({
-    data: {
-      action: `order.${status}`,
-      entityType: "Order",
-      entityId: id,
-      employeeId: session?.sub,
-    },
-  });
-
-  revalidatePath("/admin/orders");
-  revalidatePath(`/admin/orders/${id}`);
-}
-
+    s += `
 /**
  * ხელით შეკვეთა — ტელეფონით ან ადგილზე.
  *
- * ფასს **სერვერი** ითვლის იმავე ფუნქციით, რასაც საიტი (`priceOrder`).
+ * ფასს **სერვერი** ითვლის იმავე ფუნქციით, რასაც საიტი (\`priceOrder\`).
  * ხელით შეყვანილი ჯამის ველი განზრახ არ არსებობს: ორი გზა ერთსა და იმავე
  * პროდუქტს ერთსა და იმავე ფასად უნდა ყიდდეს, თორემ ჩეკები და რეპორტები
  * ერთმანეთს დაშორდება.
@@ -96,7 +57,7 @@ export async function createManualOrder(fd: FormData) {
   const address = String(fd.get("address") ?? "").trim();
   const notes = String(fd.get("notes") ?? "").trim();
 
-  const fail = (msg: string) => redirect(`/admin/orders/new?error=${encodeURIComponent(msg)}`);
+  const fail = (msg: string) => redirect(\`/admin/orders/new?error=\${encodeURIComponent(msg)}\`);
 
   if (!customerName || !customerPhone) fail("Name and phone are required");
   if (fulfillment === "delivery" && !address) fail("Delivery needs an address");
@@ -113,12 +74,12 @@ export async function createManualOrder(fd: FormData) {
   const lines: CartLineIn[] = [];
 
   for (const p of products) {
-    const raw = fd.get(`qty_${p.id}`);
+    const raw = fd.get(\`qty_\${p.id}\`);
     const qty = Number(String(raw ?? "").trim());
     if (!Number.isFinite(qty) || qty <= 0) continue;
 
     if (p.type === "pizza" && p.legacyId != null) {
-      const sizeIdx = Number(fd.get(`size_${p.id}`) ?? 1);
+      const sizeIdx = Number(fd.get(\`size_\${p.id}\`) ?? 1);
       lines.push({
         kind: "pizza",
         qty: Math.floor(qty),
@@ -201,7 +162,7 @@ export async function createManualOrder(fd: FormData) {
             qty: -u.qty,
             refType: "Order",
             refId: order.id,
-            note: `Order #${order.orderNo} (manual)`,
+            note: \`Order #\${order.orderNo} (manual)\`,
             employeeId: session.sub,
           })),
         );
@@ -224,5 +185,52 @@ export async function createManualOrder(fd: FormData) {
   });
 
   revalidatePath("/admin/orders");
-  redirect(`/admin/orders/${order.id}`);
+  redirect(\`/admin/orders/\${order.id}\`);
 }
+`;
+
+    // productId უნდა არსებობდეს — refId ყოველთვის ვალიდური არაა
+    s = s.replace(
+      "          productId: i.refId,",
+      "          productId: i.refId,",
+    );
+
+    writeFileSync(F, s);
+    console.log("✓ app/admin/orders/actions.ts");
+  }
+}
+
+// ── 2) ღილაკი სიაში ──
+{
+  const F = "app/admin/orders/page.tsx";
+  let s = readFileSync(F, "utf8");
+
+  if (s.includes("/admin/orders/new")) {
+    skip.push("orders/page");
+  } else {
+    copyFileSync(F, F + ".bak");
+
+    const old = `      <div className="admin-head">
+        <div>
+          <h1>შეკვეთები</h1>`;
+    const neu = `      <div className="admin-head">
+        <div>
+          <h1>შეკვეთები</h1>`;
+
+    // ჰედერს ვამატებთ ღილაკს — სტრუქტურის მიუხედავად
+    const m = s.match(/(<div className="admin-head">[\s\S]*?<\/div>)\n(\s*)<\/div>/);
+    if (!m) {
+      console.error("⚠ ვერ ვიპოვე ჰედერი — ღილაკი ხელით დაამატე");
+    } else {
+      s = s.replace(
+        m[0],
+        `${m[1]}\n${m[2]}  <Link className="btn" href="/admin/orders/new">\n${m[2]}    + New order\n${m[2]}  </Link>\n${m[2]}</div>`,
+      );
+      writeFileSync(F, s);
+      console.log("✓ app/admin/orders/page.tsx");
+    }
+  }
+}
+
+if (skip.length) console.log(`\nუკვე დაპატჩილი: ${skip.join(", ")}`);
+console.log("\nშემდეგი: npm run build && systemctl restart ronnys");
