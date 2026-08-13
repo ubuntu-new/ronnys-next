@@ -717,6 +717,9 @@ model Order {
   driver      Employee?    @relation("OrderDriver", fields: [driverId], references: [id])
   items       OrderItem[]
 
+  /// ტერმინალის მიერ გენერირებული uuid — იგივე შეკვეთის ხელახლა გაგზავნა უვნებელია
+  clientRef String? @unique
+
   @@index([branchId, status, createdAt])
   @@index([userId, createdAt])
   @@index([branchId, source, createdAt])

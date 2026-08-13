@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { detailLines, lineColor } from "@/lib/item-detail";
 
 /**
  * Kitchen display board.
@@ -36,34 +37,6 @@ interface Order {
   note: string | null;
   source: string;
   items: Item[];
-}
-
-/** Turn the stored config into something a cook can read at a glance. */
-function describe(it: Item): string[] {
-  const c = (it.config ?? {}) as Record<string, unknown>;
-  const out: string[] = [];
-
-  if (typeof c.sizeIdx === "number" && SIZES[c.sizeIdx]) out.push(SIZES[c.sizeIdx]);
-
-  const removed = (c.removed ?? {}) as Record<string, boolean>;
-  for (const [name, on] of Object.entries(removed)) if (on) out.push(`− ${name}`);
-
-  const tops = (c.toppings ?? {}) as Record<string, { whole?: number; left?: number; right?: number }>;
-  for (const [name, z] of Object.entries(tops)) {
-    const w = z.whole || 0;
-    const l = z.left || 0;
-    const r = z.right || 0;
-    if (w > 0) out.push(`+ ${name}${w > 1 ? ` ×${w}` : ""}`);
-    if (l > 0) out.push(`+ ${name} (L)`);
-    if (r > 0) out.push(`+ ${name} (R)`);
-  }
-
-  if (Array.isArray(c.chosen)) out.push(...(c.chosen as string[]));
-  if (Array.isArray(c.dips) && c.dips.length) out.push(`dips: ${(c.dips as string[]).join(", ")}`);
-  if (c.mozz === true) out.push("+ extra mozzarella");
-  if (c.icing === true) out.push("+ icing");
-
-  return out;
 }
 
 function minutesSince(iso: string) {
@@ -218,13 +191,23 @@ export default function KdsBoard({
 
                     <ul className="kds-items">
                       {o.items.map((it) => {
-                        const mods = describe(it);
+                        const lines = detailLines(it.config);
                         return (
                           <li key={it.id}>
                             <span className="kds-qty">{it.qty}×</span>
                             <span>
                               {it.nameKa || it.name}
-                              {mods.length > 0 && <em>{mods.join(" · ")}</em>}
+                              {lines.length > 0 && (
+                                <em>
+                                  {lines.map((l, i) => (
+                                    <span key={i} style={{ color: lineColor(l.kind) }}>
+                                      {i > 0 && " · "}
+                                      {l.kind === "removed" ? "− " : l.kind === "added" ? "+ " : ""}
+                                      {l.text}
+                                    </span>
+                                  ))}
+                                </em>
+                              )}
                             </span>
                           </li>
                         );

@@ -17,6 +17,7 @@ import {
   type Lang,
 } from "@/lib/data";
 import { SIZE_KEYS, fmt } from "@/lib/pricing";
+import { detailLines, lineColor } from "@/lib/item-detail";
 
 function lineLabel(l: CartLine, lang: Lang, t: (k: string) => string): string {
   if (l.kind === "pizza") {
@@ -33,6 +34,17 @@ function lineLabel(l: CartLine, lang: Lang, t: (k: string) => string): string {
     if (found) return itemName(found, lang);
   }
   return l.name;
+}
+
+/** კალათის ხაზი → ინგრედიენტების სია (პიცასა და ნახევარ-ნახევარზე). */
+function lineIngredients(l: CartLine): string[] {
+  if (l.kind === "pizza") return PIZZAS.find((p) => p.id === l.pizzaId)?.ings ?? [];
+  if (l.kind === "hh") {
+    const L = PIZZAS.find((p) => p.id === l.leftId)?.ings ?? [];
+    const R = PIZZAS.find((p) => p.id === l.rightId)?.ings ?? [];
+    return [...new Set([...L, ...R])];
+  }
+  return [];
 }
 
 export default function Checkout() {
@@ -198,14 +210,28 @@ export default function Checkout() {
                 <label style={{ display: "block", fontSize: "var(--text-micro)", fontWeight: 600, color: "var(--ink-2)", marginBottom: 6 }}>
                   {t("co_your_order")}
                 </label>
-                {lines.map((l, i) => (
-                  <div className="co-review-row" key={i}>
-                    <span className="cr-name">
-                      {l.qty}× {lineLabel(l, lang, t)}
-                    </span>
-                    <span className="cr-price">{fmt(l.price * l.qty)}</span>
-                  </div>
-                ))}
+                {lines.map((l, i) => {
+                  const detail = detailLines(l, lineIngredients(l));
+                  return (
+                    <div className="co-review-row" key={i}>
+                      <span className="cr-name">
+                        {l.qty}× {lineLabel(l, lang, t)}
+                        {detail.length > 0 && (
+                          <span className="cr-detail">
+                            {detail.map((d, j) => (
+                              <span key={j} style={{ color: lineColor(d.kind) }}>
+                                {j > 0 && " · "}
+                                {d.kind === "removed" ? "− " : d.kind === "added" ? "+ " : ""}
+                                {d.text}
+                              </span>
+                            ))}
+                          </span>
+                        )}
+                      </span>
+                      <span className="cr-price">{fmt(l.price * l.qty)}</span>
+                    </div>
+                  );
+                })}
                 <div className="co-sum">
                   <div className="co-sum-row">
                     <span>{t("subtotal")}</span>

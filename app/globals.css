@@ -2156,3 +2156,13 @@ button.trust-item-link:hover { text-decoration-color: var(--green); }
 @media (max-width: 560px) {
   .branch-bar-hint { flex-basis: 100%; }
 }
+
+
+/* checkout review — item detail */
+.cr-detail {
+  display: block;
+  font-size: var(--text-micro, 12px);
+  line-height: 1.5;
+  opacity: .85;
+  margin-top: 2px;
+}

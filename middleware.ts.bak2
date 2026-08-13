@@ -17,12 +17,6 @@ async function hasValidSession(token?: string) {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // ── /pos — ტერმინალს ენის პრეფიქსი არ სჭირდება.
-  // სესიას თვითონ ამოწმებს (ცალკე cookie), ამიტომ აქ მხოლოდ გვატარებთ.
-  if (pathname === "/pos" || pathname.startsWith("/pos/")) {
-    return NextResponse.next();
-  }
-
   // ── /admin — locale-რედირექტი არ ვრცელდება, სამაგიეროდ სესია მოწმდება ──
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     if (pathname === "/admin/login") return NextResponse.next();

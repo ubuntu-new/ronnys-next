@@ -105,7 +105,15 @@ function pizzaPrice(menu: MenuPayload, line: CartLineIn, errors: string[]) {
     unit: r2(p.sizes[sizeIdx] + extra - credit),
     name: p.name,
     refId: `pizza-${p.id}`,
-    config: { sizeIdx, crustIdx: line.crustIdx ?? 0, sauceIdx: line.sauceIdx ?? 2, toppings, removed: line.removed ?? {} },
+    config: {
+      sizeIdx,
+      crustIdx: line.crustIdx ?? 0,
+      sauceIdx: line.sauceIdx ?? 2,
+      toppings,
+      removed: line.removed ?? {},
+      // რეცეპტის ასლი — ჩანაწერი უცვლელი უნდა დარჩეს, თუნდაც რეცეპტი შეიცვალოს
+      ingredients: p.ings ?? [],
+    },
   };
 }
 
@@ -141,6 +149,8 @@ function hhPrice(menu: MenuPayload, line: CartLineIn, errors: string[]) {
       crustIdx: line.crustIdx ?? 0,
       sauceIdx: line.sauceIdx ?? 2,
       toppings: line.toppings ?? {},
+      leftIngredients: L.ings ?? [],
+      rightIngredients: R.ings ?? [],
     },
   };
 }

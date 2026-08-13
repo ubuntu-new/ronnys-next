@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { i18nText, money } from "@/lib/admin-utils";
 import { setOrderStatus } from "../actions";
+import { detailLines, lineColor } from "@/lib/item-detail";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,24 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
     include: { branch: true, items: true },
   });
   if (!o) notFound();
+
+  // ძველი შეკვეთები ინგრედიენტების ასლის გარეშე შეიქმნა — მათთვის
+  // პროდუქტის მიმდინარე რეცეპტს ვიყენებთ, რომ სია მაინც ჩანდეს
+  const productIds = o.items.map((i) => i.productId).filter((x): x is string => !!x);
+  const recipes = productIds.length
+    ? await db.productTopping.findMany({
+        where: { productId: { in: productIds } },
+        include: { topping: { select: { name: true } } },
+        orderBy: { sortOrder: "asc" },
+      })
+    : [];
+  const recipeOf = (pid: string | null) =>
+    pid
+      ? recipes
+          .filter((r) => r.productId === pid)
+          .map((r) => String((r.topping.name as Record<string, unknown>)?.en ?? ""))
+          .filter(Boolean)
+      : [];
 
   const history = Array.isArray(o.statusHistory)
     ? (o.statusHistory as { status?: string; at?: string; by?: string }[])
@@ -138,10 +157,21 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
             {o.items.map((it) => (
               <tr key={it.id}>
                 <td>
-                  {i18nText(it.name)}
-                  <div className="hint" style={{ whiteSpace: "pre-wrap" }}>
-                    {JSON.stringify(it.config)}
-                  </div>
+                  <b>{i18nText(it.name)}</b>
+                  {(() => {
+                    const lines = detailLines(it.config, recipeOf(it.productId));
+                    if (lines.length === 0) return null;
+                    return (
+                      <ul style={{ margin: "4px 0 0", paddingLeft: 16, fontSize: 13, lineHeight: 1.6 }}>
+                        {lines.map((l, i) => (
+                          <li key={i} style={{ color: lineColor(l.kind) ?? "var(--a-muted)" }}>
+                            {l.kind === "removed" ? "− " : l.kind === "added" ? "+ " : ""}
+                            {l.text}
+                          </li>
+                        ))}
+                      </ul>
+                    );
+                  })()}
                 </td>
                 <td>
                   <span className="hint">{KIND[it.kind] ?? it.kind}</span>
