@@ -19,6 +19,8 @@ const SIZES = ["S", "M", "XL"];
 const CRUSTS = ["Original", "Thin"];
 const SAUCES = ["None", "Light", "Regular", "Extra"];
 const QUICK_CASH = [5, 10, 20, 50, 100];
+/** Lock after this long with no interaction. */
+const IDLE_MS = 3 * 60 * 1000;
 
 const QUEUE_KEY = "ronnys-pos-queue";
 const TERMINAL_KEY = "ronnys-pos-terminal";
@@ -55,7 +57,27 @@ interface Line {
   ingredients?: string[];
 }
 
+interface CustomerAddress { id: string; title: string | null; line: string; note: string | null; isDefault: boolean }
+interface Customer {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  points: number;
+  orders: number;
+  addresses: CustomerAddress[];
+}
+
 interface Held { id: string; label: string; lines: Line[]; at: number }
+interface RecentOrder {
+  id: string;
+  no: number;
+  status: string;
+  total: number;
+  at: string;
+  customer: string | null;
+  items: { name: string; qty: number; detail: string; total: number }[];
+}
+
 interface Queued { clientRef: string; localNo: string; payload: unknown; at: number }
 
 const uuid = () =>
@@ -70,11 +92,15 @@ export default function PosTerminal({
   menu,
   branches,
   terminals,
+  unavailable = [],
+  unavailableItems = [],
 }: {
   session: { name: string; branchId: string; posId: string } | null;
   menu: Menu | null;
   branches: { id: string; name: string; code: string }[];
   terminals: { posId: string; branchId: string; label: string }[];
+  unavailable?: number[];
+  unavailableItems?: string[];
 }) {
   const [branchId, setBranchId] = useState("");
   const [posId, setPosId] = useState("");
@@ -89,6 +115,11 @@ export default function PosTerminal({
   const [search, setSearch] = useState("");
   const [fulfillment, setFulfillment] = useState<"pickup" | "delivery">("pickup");
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "", notes: "" });
+  const [known, setKnown] = useState<Customer | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [addrId, setAddrId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<Customer[]>([]);
+  const [showSug, setShowSug] = useState(false);
   const [showCustomer, setShowCustomer] = useState(false);
   const [paying, setPaying] = useState(false);
   const [tendered, setTendered] = useState("");
@@ -99,6 +130,12 @@ export default function PosTerminal({
   const [showHeld, setShowHeld] = useState(false);
   const [queue, setQueue] = useState<Queued[]>([]);
   const [online, setOnline] = useState(true);
+  const [locked, setLocked] = useState(false);
+  const [unlockPin, setUnlockPin] = useState("");
+  const [recent, setRecent] = useState<RecentOrder[] | null>(null);
+  const [voiding, setVoiding] = useState<RecentOrder | null>(null);
+  const [voidPin, setVoidPin] = useState("");
+  const [voidReason, setVoidReason] = useState("");
 
   // ── boot ──
   useEffect(() => {
@@ -127,6 +164,49 @@ export default function PosTerminal({
       window.removeEventListener("offline", off);
     };
   }, [session]);
+
+  /**
+   * Autocomplete from 3 characters.
+   *
+   * The 250ms delay is not cosmetic: firing on every keystroke floods a till's
+   * connection and answers arrive out of order, so the last thing typed isn't
+   * the last thing shown. `cancelled` drops any reply that a newer query has
+   * already superseded.
+   */
+  useEffect(() => {
+    const q = customer.phone.trim();
+    if (q.length < 3) { setSuggestions([]); return; }
+
+    let cancelled = false;
+    const id = window.setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/pos/customers?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (!cancelled) {
+          setSuggestions(Array.isArray(data.results) ? data.results : []);
+          setShowSug(true);
+        }
+      } catch {
+        /* silent — autocomplete is a convenience, not a requirement */
+      }
+    }, 250);
+
+    return () => { cancelled = true; window.clearTimeout(id); };
+  }, [customer.phone]);
+
+  const pickCustomer = useCallback((c: Customer) => {
+    setKnown(c);
+    setShowSug(false);
+    setSuggestions([]);
+    const def = c.addresses.find((a) => a.isDefault) ?? c.addresses[0];
+    setAddrId(def?.id ?? null);
+    setCustomer((cur) => ({
+      ...cur,
+      name: c.name ?? cur.name,
+      phone: c.phone ?? cur.phone,
+      address: def?.line ?? cur.address,
+    }));
+  }, []);
 
   const persistQueue = useCallback((q: Queued[]) => {
     setQueue(q);
@@ -168,6 +248,78 @@ export default function PosTerminal({
     return () => window.clearInterval(id);
   }, [signedIn, drain, online]);
 
+  /**
+   * Idle lock.
+   *
+   * The session lasts a shift, but the terminal stands on a counter all day.
+   * Without this, "who sold this" stops meaning anything the moment the
+   * cashier steps away — anyone can ring up a sale under their name.
+   */
+  useEffect(() => {
+    if (!signedIn) return;
+    let timer: number;
+
+    const reset = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setLocked(true), IDLE_MS);
+    };
+
+    const events = ["pointerdown", "keydown", "wheel"];
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    reset();
+
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, [signedIn]);
+
+  const unlock = async () => {
+    setError(null);
+    try {
+      const res = await fetch("/api/pos/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: unlockPin, branchId, posId }),
+      });
+      if (!res.ok) { setError("PIN not recognised"); setUnlockPin(""); return; }
+      setLocked(false);
+      setUnlockPin("");
+    } catch {
+      setError("No connection");
+    }
+  };
+
+  const loadRecent = async () => {
+    try {
+      const res = await fetch("/api/pos/recent", { cache: "no-store" });
+      const data = await res.json();
+      setRecent(Array.isArray(data.orders) ? data.orders : []);
+    } catch {
+      setRecent([]);
+    }
+  };
+
+  const doVoid = async () => {
+    if (!voiding) return;
+    setError(null);
+    try {
+      const res = await fetch("/api/pos/void", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: voiding.id, pin: voidPin, reason: voidReason }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Could not void"); return; }
+      setVoiding(null);
+      setVoidPin("");
+      setVoidReason("");
+      loadRecent();
+    } catch {
+      setError("No connection");
+    }
+  };
+
   // ── auth ──
   const doSignIn = async () => {
     setError(null);
@@ -185,6 +337,70 @@ export default function PosTerminal({
       setPin("");
     } catch {
       setError("No connection to the server");
+    }
+  };
+
+  /**
+   * Phone is the key: one person, one record. Typed number → normalised →
+   * either the customer is already here with their addresses and points, or
+   * we create them on the spot.
+   */
+  const lookupCustomer = async () => {
+    const phone = customer.phone.trim();
+    if (phone.replace(/\D/g, "").length < 6) return;
+
+    setLookingUp(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/pos/customers?phone=${encodeURIComponent(phone)}`);
+      const data = await res.json();
+      if (data.customer) {
+        setKnown(data.customer);
+        setCustomer((c) => ({ ...c, name: data.customer.name ?? c.name }));
+        const def = data.customer.addresses.find((a: CustomerAddress) => a.isDefault) ?? data.customer.addresses[0];
+        if (def) {
+          setAddrId(def.id);
+          setCustomer((c) => ({ ...c, address: def.line }));
+        }
+      } else {
+        setKnown(null);
+        setAddrId(null);
+      }
+    } catch {
+      setError("Could not look up the customer");
+    } finally {
+      setLookingUp(false);
+    }
+  };
+
+  const saveCustomer = async () => {
+    const phone = customer.phone.trim();
+    if (phone.replace(/\D/g, "").length < 6) { setError("Enter a phone number"); return; }
+
+    setLookingUp(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/pos/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone,
+          name: customer.name,
+          address:
+            fulfillment === "delivery" && customer.address.trim() && !addrId
+              ? { street: customer.address.trim() }
+              : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Could not save the customer"); return; }
+      setKnown(data.customer);
+      const def = data.customer?.addresses?.[0];
+      if (def && !addrId) { setAddrId(def.id); setCustomer((c) => ({ ...c, address: def.line })); }
+    } catch {
+      setError("Could not save the customer");
+    } finally {
+      setLookingUp(false);
     }
   };
 
@@ -268,6 +484,8 @@ export default function PosTerminal({
   const clearTicket = () => {
     setLines([]);
     setCustomer({ name: "", phone: "", address: "", notes: "" });
+    setKnown(null);
+    setAddrId(null);
     setTendered("");
   };
 
@@ -303,6 +521,7 @@ export default function PosTerminal({
       clientRef,
       localNo,
       fulfillment,
+      userId: known?.id,
       customerName: customer.name,
       customerPhone: customer.phone,
       address: customer.address,
@@ -425,12 +644,17 @@ export default function PosTerminal({
   // ─────────────────────────────────────────────
   const q = search.trim().toLowerCase();
 
+  const offPizzas = new Set(unavailable);
+  const offItems = new Set(unavailableItems);
+
   const pizzaTiles = menu.PIZZAS
+    .filter((p) => !offPizzas.has(p.id))
     .filter((p) => !q || p.name.toLowerCase().includes(q))
     .map((p) => ({ key: `p${p.id}`, name: p.name, price: p.sizes[0], photo: menu.PIZZA_PHOTOS?.[p.id], onTap: () => openPizza(p), from: true }));
 
   const itemTiles = (arr: Item[]) =>
-    arr.filter((i) => !q || i.name.toLowerCase().includes(q))
+    arr.filter((i) => !offItems.has(i.id))
+      .filter((i) => !q || i.name.toLowerCase().includes(q))
       .map((i) => ({ key: i.id, name: i.name, price: i.price, photo: i.photo, onTap: () => addSimple(i), from: false }));
 
   const tiles = q
@@ -450,9 +674,13 @@ export default function PosTerminal({
         <div className="pos-head-right">
           {!online && <span className="pos-offline">Offline</span>}
           {queue.length > 0 && <span className="pos-sync">{queue.length} to sync</span>}
+          <button type="button" onClick={() => { loadRecent(); }}>
+            Recent
+          </button>
           <button type="button" onClick={() => setShowHeld(true)}>
             Held {held.length > 0 && <b>{held.length}</b>}
           </button>
+          <button type="button" onClick={() => setLocked(true)}>Lock</button>
           <button type="button" onClick={signOut}>Sign out</button>
         </div>
       </header>
@@ -505,14 +733,93 @@ export default function PosTerminal({
             <button type="button" className={fulfillment === "delivery" ? "on" : ""} onClick={() => { setFulfillment("delivery"); setShowCustomer(true); }}>Delivery</button>
           </div>
 
-          {(fulfillment === "delivery" || customer.name || showCustomer) && (
+          {(true) && (
             <div className="pos-customer">
-              <input placeholder="Customer name" value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} />
-              <input placeholder="Phone" inputMode="tel" value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} />
-              {fulfillment === "delivery" && (
-                <input placeholder="Address" value={customer.address} onChange={(e) => setCustomer({ ...customer, address: e.target.value })} />
+              <div className="pos-phone-row">
+                <div className="pos-sug-wrap">
+                  <input
+                    placeholder="Phone or name — from 3 characters"
+                    value={customer.phone}
+                    onChange={(e) => { setCustomer({ ...customer, phone: e.target.value }); setKnown(null); setAddrId(null); }}
+                    onFocus={() => suggestions.length > 0 && setShowSug(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { setShowSug(false); lookupCustomer(); }
+                      if (e.key === "Escape") setShowSug(false);
+                    }}
+                  />
+                  {showSug && suggestions.length > 0 && (
+                    <ul className="pos-sug">
+                      {suggestions.map((c) => (
+                        <li key={c.id}>
+                          <button type="button" onClick={() => pickCustomer(c)}>
+                            <b>{c.name ?? "No name"}</b>
+                            <span>{c.phone}</span>
+                            <i>{c.orders} orders{c.points > 0 && ` · ${c.points} pts`}</i>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <button type="button" onClick={() => { setShowSug(false); lookupCustomer(); }} disabled={lookingUp}>
+                  {lookingUp ? "…" : "Find"}
+                </button>
+              </div>
+
+              {known ? (
+                <div className="pos-known">
+                  <b>{known.name ?? "No name"}</b>
+                  <span>
+                    {known.orders} orders
+                    {known.points > 0 && ` · ${known.points} pts`}
+                  </span>
+                </div>
+              ) : (
+                customer.phone.replace(/\D/g, "").length >= 6 && (
+                  <div className="pos-new-customer">
+                    New customer — will be created on save
+                  </div>
+                )
               )}
+
+              <input
+                placeholder="Customer name"
+                value={customer.name}
+                onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
+              />
+
+              {fulfillment === "delivery" && (
+                <>
+                  {known && known.addresses.length > 0 && (
+                    <select
+                      value={addrId ?? ""}
+                      onChange={(e) => {
+                        const a = known.addresses.find((x) => x.id === e.target.value);
+                        setAddrId(a?.id ?? null);
+                        setCustomer((c) => ({ ...c, address: a?.line ?? "" }));
+                      }}
+                    >
+                      {known.addresses.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.title ? `${a.title} — ` : ""}{a.line}
+                        </option>
+                      ))}
+                      <option value="">+ new address</option>
+                    </select>
+                  )}
+                  <input
+                    placeholder="Address"
+                    value={customer.address}
+                    onChange={(e) => { setCustomer({ ...customer, address: e.target.value }); setAddrId(null); }}
+                  />
+                </>
+              )}
+
               <input placeholder="Order note" value={customer.notes} onChange={(e) => setCustomer({ ...customer, notes: e.target.value })} />
+
+              <button type="button" className="pos-ghost" onClick={saveCustomer} disabled={lookingUp}>
+                {known ? "Update customer" : "Save customer"}
+              </button>
             </div>
           )}
 
@@ -717,6 +1024,120 @@ export default function PosTerminal({
               <button type="button" onClick={() => setShowHeld(false)}>Close</button>
               <span />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── recent orders ── */}
+      {recent !== null && (
+        <div className="pos-modal" onClick={(e) => e.target === e.currentTarget && setRecent(null)}>
+          <div className="pos-sheet">
+            <h2>Recent orders — this terminal</h2>
+            {recent.length === 0 && <p className="pos-empty">Nothing yet</p>}
+            {recent.map((o) => (
+              <div className="pos-recent" key={o.id}>
+                <div className="pos-recent-top">
+                  <b>#{o.no}</b>
+                  <span>{new Date(o.at).toLocaleTimeString("ka-GE")}</span>
+                  <b className="pos-recent-total">{money(o.total)} ₾</b>
+                </div>
+                <div className="pos-recent-items">
+                  {o.items.map((it, i) => (
+                    <div key={i}>
+                      {it.qty}× {it.name}
+                      {it.detail && <em> · {it.detail}</em>}
+                    </div>
+                  ))}
+                </div>
+                <div className="pos-recent-foot">
+                  {o.status === "cancelled" ? (
+                    <span className="pos-voided">Voided</span>
+                  ) : (
+                    <button type="button" onClick={() => { setVoiding(o); setRecent(null); }}>
+                      Void
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            <div className="pos-sheet-foot">
+              <button type="button" onClick={() => setRecent(null)}>Close</button>
+              <span />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── void ── */}
+      {voiding && (
+        <div className="pos-modal" onClick={(e) => e.target === e.currentTarget && setVoiding(null)}>
+          <div className="pos-sheet pos-pay">
+            <h2>Void order #{voiding.no}</h2>
+            <p className="pos-pay-due">Amount <b>{money(voiding.total)} ₾</b></p>
+
+            <label>Reason</label>
+            <input
+              className="pos-void-input"
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              placeholder="Wrong item, customer left…"
+            />
+
+            <label>Manager PIN</label>
+            <input
+              className="pos-void-input"
+              type="password"
+              inputMode="numeric"
+              value={voidPin}
+              onChange={(e) => setVoidPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+              placeholder="••••"
+            />
+
+            <p className="pos-fiscal">
+              ⚠️ A void needs someone else&apos;s PIN. Both names and the reason are recorded, and
+              the stock goes back.
+            </p>
+
+            {error && <p className="pos-err">{error}</p>}
+
+            <div className="pos-sheet-foot">
+              <button type="button" onClick={() => { setVoiding(null); setError(null); }}>Cancel</button>
+              <button className="pos-primary" type="button" onClick={doVoid} disabled={voidReason.trim().length < 3 || voidPin.length < 4}>
+                Void order
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── idle lock ── */}
+      {locked && (
+        <div className="pos-lock">
+          <div className="pos-lock-box">
+            <h2>Locked</h2>
+            <p>{posId} · enter your PIN to continue</p>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoFocus
+              value={unlockPin}
+              onChange={(e) => setUnlockPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+              onKeyDown={(e) => e.key === "Enter" && unlock()}
+              placeholder="••••"
+            />
+            <div className="pos-keys">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+                <button key={n} type="button" onClick={() => setUnlockPin((p) => (p + n).slice(0, 8))}>{n}</button>
+              ))}
+              <button type="button" onClick={() => setUnlockPin("")}>C</button>
+              <button type="button" onClick={() => setUnlockPin((p) => (p + "0").slice(0, 8))}>0</button>
+              <button type="button" onClick={() => setUnlockPin((p) => p.slice(0, -1))}>←</button>
+            </div>
+            {error && <p className="pos-err">{error}</p>}
+            <button className="pos-primary" type="button" onClick={unlock} disabled={unlockPin.length < 4}>
+              Unlock
+            </button>
+            <p className="pos-lock-note">The ticket is kept — nothing is lost.</p>
           </div>
         </div>
       )}

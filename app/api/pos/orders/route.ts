@@ -32,6 +32,7 @@ export async function POST(req: Request) {
     clientRef?: string;
     lines?: CartLineIn[];
     fulfillment?: "delivery" | "pickup";
+    userId?: string;
     customerName?: string;
     customerPhone?: string;
     address?: string;
@@ -92,6 +93,7 @@ export async function POST(req: Request) {
         branchId: session.branchId,
         fulfillmentType: fulfillment,
         address: fulfillment === "delivery" && body.address ? { text: body.address.trim() } : undefined,
+        userId: body.userId || null,
         customerName: body.customerName?.trim() || null,
         customerPhone: body.customerPhone?.trim() || null,
         notes: notes || null,
@@ -146,6 +148,23 @@ export async function POST(req: Request) {
       }
     } catch (e) {
       console.error("pos: stock deduction failed (order kept)", e);
+    }
+
+    // მუდმივი კლიენტის სტატისტიკა — ამის გარეშე „ვინ არის ჩვენი
+    // მუდმივი კლიენტი" კითხვას პასუხი არ აქვს
+    if (body.userId) {
+      try {
+        await db.user.update({
+          where: { id: body.userId },
+          data: {
+            orderCount: { increment: 1 },
+            totalSpent: { increment: priced.total },
+            lastOrderAt: new Date(),
+          },
+        });
+      } catch (e) {
+        console.error("pos: customer stats update failed (order kept)", e);
+      }
     }
 
     await logAction({

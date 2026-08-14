@@ -14,8 +14,29 @@ export default async function PosPage() {
     getMenu().catch(() => null),
   ]);
 
+  // ── რა არ იყიდება ამ ფილიალში ──
+  // ⚠️ ამის გარეშე მოლარე გაყიდიდა იმას, რაც სწორედ იმ ფილიალში გათავდა.
+  // საიტი ამას ითვალისწინებდა, POS — არა.
+  let unavailable: number[] = [];
+  let unavailableItems: string[] = [];
+
+  if (session?.branchId) {
+    const off = await db.branchProduct.findMany({
+      where: { branchId: session.branchId, available: false },
+      include: { product: { select: { id: true, type: true, legacyId: true } } },
+    });
+    unavailable = off
+      .filter((o) => o.product.type === "pizza" && o.product.legacyId != null)
+      .map((o) => o.product.legacyId as number);
+    unavailableItems = off
+      .filter((o) => o.product.type !== "pizza")
+      .map((o) => o.product.id.replace(/^(side|drink)-/, ""));
+  }
+
   return (
     <PosTerminal
+      unavailable={unavailable}
+      unavailableItems={unavailableItems}
       session={session}
       menu={menu}
       branches={branches.map((b) => ({ id: b.id, name: i18nText(b.name), code: b.code }))}
