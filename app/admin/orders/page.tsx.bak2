@@ -36,12 +36,7 @@ export default async function OrdersPage({
       },
       orderBy: { createdAt: "desc" },
       take: 100,
-      include: {
-        branch: true,
-        driver: { select: { name: true } },
-        createdBy: { select: { name: true } },
-        _count: { select: { items: true } },
-      },
+      include: { branch: true, driver: { select: { name: true } }, _count: { select: { items: true } } },
     }),
     db.order.groupBy({ by: ["status"], _count: true }),
   ]);
@@ -105,7 +100,6 @@ export default async function OrdersPage({
                 <th style={{ width: 80 }}>№</th>
                 <th>კლიენტი</th>
                 <th>ფილიალი</th>
-                <th style={{ width: 140 }}>ვინ</th>
                 <th>ტიპი</th>
                 <th>პოზიცია</th>
                 <th>ჯამი</th>
@@ -126,14 +120,6 @@ export default async function OrdersPage({
                     <div className="hint">{o.customerPhone ?? ""}</div>
                   </td>
                   <td>{i18nText(o.branch.name)}</td>
-                  <td>
-                    {o.createdBy ? (
-                      o.createdBy.name
-                    ) : (
-                      <span className="hint">{o.source === "web" ? "საიტი" : o.source}</span>
-                    )}
-                    {o.posId && <div className="hint">{o.posId}</div>}
-                  </td>
                   <td>
                     <span className="hint">
                       {o.fulfillmentType === "pickup" ? "წაღება" : "მიწოდება"}

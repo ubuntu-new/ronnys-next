@@ -1,0 +1,167 @@
+/* Driver — a phone in one hand, often in the rain. Big targets, no fuss. */
+
+:root {
+  --d-ink: #1c1917;
+  --d-muted: #78716c;
+  --d-line: #e7e5e4;
+  --d-orange: #C8692E;
+  --d-danger: #b3261e;
+  --d-ok: #3f7d3f;
+}
+
+* { box-sizing: border-box; }
+
+.drv-body {
+  margin: 0;
+  font-family: "Noto Sans Georgian", "Noto Sans", system-ui, sans-serif;
+  color: var(--d-ink);
+  background: #f5f4f2;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── sign in ── */
+.drv-login { max-width: 340px; margin: 0 auto; padding: 48px 20px; text-align: center; }
+.drv-login h1 { font-size: 30px; margin: 0; }
+.drv-login > p { color: var(--d-muted); margin: 4px 0 24px; }
+.drv-login input {
+  width: 100%;
+  padding: 16px;
+  font: inherit;
+  font-size: 22px;
+  text-align: center;
+  letter-spacing: .4em;
+  border: 1px solid var(--d-line);
+  border-radius: 12px;
+}
+.drv-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0; }
+.drv-keys button {
+  padding: 20px;
+  font-size: 24px;
+  font-weight: 600;
+  border: 1px solid var(--d-line);
+  background: #fff;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.drv-keys button:active { background: #ebe9e6; }
+
+.drv-primary {
+  width: 100%;
+  padding: 18px;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--d-orange);
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.drv-primary:disabled { opacity: .4; }
+.drv-ghost {
+  width: 100%;
+  padding: 14px;
+  margin-top: 8px;
+  font: inherit;
+  border: 1px solid var(--d-line);
+  background: #fff;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.drv-err { color: var(--d-danger); font-size: 14px; }
+.drv-err-bar { margin: 0; padding: 8px 16px; background: #fdecea; }
+
+/* ── shell ── */
+.drv-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #fff;
+  border-bottom: 1px solid var(--d-line);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.drv-head b { font-size: 17px; }
+.drv-head span { display: block; font-size: 13px; color: var(--d-muted); }
+.drv-head button {
+  border: 1px solid var(--d-line);
+  background: #fff;
+  border-radius: 8px;
+  padding: 9px 13px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.drv-list { padding: 12px; display: grid; gap: 12px; }
+.drv-empty { text-align: center; color: var(--d-muted); padding: 40px 0; }
+
+.drv-card {
+  background: #fff;
+  border: 1px solid var(--d-line);
+  border-left: 5px solid var(--d-ok);
+  border-radius: 14px;
+  padding: 14px;
+}
+.drv-late { border-left-color: var(--d-danger); background: #fffaf9; }
+.drv-card header { display: flex; justify-content: space-between; align-items: baseline; }
+.drv-card header b { font-size: 22px; }
+.drv-mins { font-size: 18px; font-weight: 600; }
+.drv-late .drv-mins { color: var(--d-danger); }
+
+.drv-addr { font-size: 19px; font-weight: 600; margin: 10px 0 4px; line-height: 1.35; }
+.drv-meta { font-size: 14px; color: var(--d-muted); margin: 0; }
+
+.drv-items { list-style: none; margin: 10px 0 0; padding: 0; font-size: 15px; line-height: 1.7; }
+.drv-note {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  background: #fdf3d6;
+  color: #8a6a12;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.drv-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 22px;
+  font-weight: 700;
+  margin: 12px 0;
+}
+.drv-total span { font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
+.drv-paid { background: #e8f2e8; color: var(--d-ok); }
+.drv-unpaid { background: #fdf3d6; color: #8a6a12; }
+
+.drv-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.drv-btn {
+  display: block;
+  padding: 14px;
+  text-align: center;
+  text-decoration: none;
+  color: var(--d-ink);
+  font-weight: 600;
+  border: 1px solid var(--d-line);
+  background: #fff;
+  border-radius: 10px;
+}
+
+.drv-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .5);
+  display: flex;
+  align-items: flex-end;
+  z-index: 50;
+}
+.drv-sheet {
+  background: #fff;
+  width: 100%;
+  border-radius: 16px 16px 0 0;
+  padding: 22px;
+}
+.drv-sheet h2 { margin: 0 0 6px; font-size: 22px; }
+.drv-sheet p { margin: 0 0 18px; color: var(--d-muted); }

@@ -155,6 +155,7 @@ export async function createManualOrder(fd: FormData) {
   const order = await db.order.create({
     data: {
       source: "phone",
+      createdByEmployee: session.sub,
       orgId: org.id,
       branchId: branch!.id,
       fulfillmentType: fulfillment === "pickup" ? "pickup" : "delivery",

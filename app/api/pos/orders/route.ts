@@ -7,6 +7,7 @@ import { computeConsumption, locationForBranch } from "@/lib/consumption";
 import { recordMovements } from "@/lib/stock";
 import { applyOutgoingCost } from "@/lib/costing";
 import { logAction } from "@/lib/audit";
+import { getLoyaltySettings, redeemValue, awardPoints, redeemPoints } from "@/lib/loyalty";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,7 @@ export async function POST(req: Request) {
     lines?: CartLineIn[];
     fulfillment?: "delivery" | "pickup";
     userId?: string;
+    redeemPoints?: number;
     customerName?: string;
     customerPhone?: string;
     address?: string;
@@ -76,6 +78,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Some items are no longer on the menu" }, { status: 409 });
   }
 
+  // ── ქულების გამოყენება ──
+  // მხოლოდ ცნობილ კლიენტს და მხოლოდ იმდენით, რამდენიც ანგარიშზე აქვს.
+  let redeem = { points: 0, value: 0 };
+  if (body.userId && Number(body.redeemPoints) > 0) {
+    const [user, ls] = await Promise.all([
+      db.user.findUnique({ where: { id: body.userId }, select: { loyaltyPoints: true } }),
+      getLoyaltySettings(),
+    ]);
+    if (user && ls.enabled) {
+      const asked = Math.min(Number(body.redeemPoints), user.loyaltyPoints);
+      redeem = redeemValue(asked, ls, priced.subtotal);
+    }
+  }
+
+  const finalTotal = Math.round((priced.total - redeem.value) * 100) / 100;
+
   const org = await db.organization.findFirst();
   if (!org) return NextResponse.json({ error: "Organization not found" }, { status: 500 });
 
@@ -89,6 +107,7 @@ export async function POST(req: Request) {
         source: "pos",
         clientRef,
         posId: session.posId,
+        createdByEmployee: session.sub,
         orgId: org.id,
         branchId: session.branchId,
         fulfillmentType: fulfillment,
@@ -99,7 +118,11 @@ export async function POST(req: Request) {
         notes: notes || null,
         subtotal: priced.subtotal,
         deliveryFee: priced.deliveryFee,
-        total: priced.total,
+        total: finalTotal,
+        pointsRedeemed: redeem.points,
+        pointsValue: redeem.value,
+        discountTotal: redeem.value,
+        discountBreakdown: redeem.points > 0 ? [{ type: "points", amount: redeem.value }] : [],
         // a till sale is already paid for and already confirmed
         status: "confirmed",
         statusHistory: [
@@ -122,6 +145,27 @@ export async function POST(req: Request) {
       },
       select: { id: true, orderNo: true, total: true },
     });
+
+    // ── loyalty ──
+    // Never blocks the sale: a lost point is cheaper than a lost order.
+    if (body.userId) {
+      try {
+        if (redeem.points > 0) {
+          await redeemPoints({ userId: body.userId, orderId: order.id, points: redeem.points, value: redeem.value });
+        }
+        const earned = await awardPoints({
+          userId: body.userId,
+          orderId: order.id,
+          subtotal: priced.subtotal,
+          redeemedValue: redeem.value,
+        });
+        if (earned > 0) {
+          await db.order.update({ where: { id: order.id }, data: { pointsEarned: earned } });
+        }
+      } catch (e) {
+        console.error("pos: loyalty failed (order kept)", e);
+      }
+    }
 
     // ── stock, same as every other channel ──
     try {

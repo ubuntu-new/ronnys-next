@@ -6,6 +6,8 @@ import { computeConsumption, locationForBranch } from "@/lib/consumption";
 import { recordMovements } from "@/lib/stock";
 import { applyOutgoingCost } from "@/lib/costing";
 import { notifyNewOrder } from "@/lib/telegram";
+import { awardPoints } from "@/lib/loyalty";
+import { normalizePhone } from "@/lib/phone";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -139,6 +141,43 @@ export async function POST(req: Request) {
       },
       select: { id: true, orderNo: true, total: true },
     });
+
+    // ── loyalty ──
+    // The website has no accounts yet, so the phone identifies the customer.
+    // Same key as the till, so a phone order and a web order are one person.
+    try {
+      const key = normalizePhone(phone);
+      if (key) {
+        const user = await db.user.upsert({
+          where: { phone: key },
+          update: { name: name || undefined },
+          create: { phone: key, name: name || null },
+          select: { id: true },
+        });
+        await db.order.update({
+          where: { id: order.id },
+          data: { userId: user.id },
+        });
+        const earned = await awardPoints({
+          userId: user.id,
+          orderId: order.id,
+          subtotal: priced.subtotal,
+        });
+        if (earned > 0) {
+          await db.order.update({ where: { id: order.id }, data: { pointsEarned: earned } });
+        }
+        await db.user.update({
+          where: { id: user.id },
+          data: {
+            orderCount: { increment: 1 },
+            totalSpent: { increment: priced.total },
+            lastOrderAt: new Date(),
+          },
+        });
+      }
+    } catch (e) {
+      console.error("order: loyalty failed (order kept)", e);
+    }
 
     // ── Telegram (ფონურად — პასუხს არ ვაყოვნებთ) ──
     void notifyNewOrder({

@@ -125,3 +125,20 @@
 }
 .kds-card footer button:active { transform: translateY(1px); }
 .kds-done { background: #3f7d3f !important; }
+
+
+/* driver assignment */
+.kds-driver {
+  width: 100%;
+  padding: 11px;
+  margin-bottom: 8px;
+  font: inherit;
+  font-size: 15px;
+  border: 1px solid var(--a-line);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+.kds-cols { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 1300px) { .kds-cols { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 700px) { .kds-cols { grid-template-columns: 1fr; } }

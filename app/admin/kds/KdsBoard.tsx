@@ -53,6 +53,7 @@ export default function KdsBoard({
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
+  const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([]);
   const [, setTick] = useState(0);
 
   const seen = useRef<Set<string>>(new Set());
@@ -98,6 +99,7 @@ export default function KdsBoard({
         seen.current = new Set(list.map((o) => o.id));
 
         setOrders(list);
+        setDrivers(Array.isArray(data.drivers) ? data.drivers : []);
         setError(null);
       } catch {
         if (alive) setError("Connection lost — retrying");
@@ -118,13 +120,13 @@ export default function KdsBoard({
     return () => window.clearInterval(id);
   }, []);
 
-  const move = async (id: string, status: string) => {
+  const move = async (id: string, status: string, driverId?: string) => {
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
     try {
       await fetch("/api/admin/kds", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, status }),
+        body: JSON.stringify({ id, status, driverId }),
       });
     } catch {
       setError("Could not save — will refresh");
@@ -135,6 +137,7 @@ export default function KdsBoard({
     { key: "queue", title: "Queue", statuses: ["new", "confirmed"] },
     { key: "preparing", title: "Preparing", statuses: ["preparing"] },
     { key: "ready", title: "Ready", statuses: ["ready"] },
+    { key: "out", title: "Out for delivery", statuses: ["delivering"] },
   ];
 
   const fullscreen = () => {
@@ -227,9 +230,26 @@ export default function KdsBoard({
                           Ready
                         </button>
                       )}
+                      {o.status === "ready" && o.type === "delivery" && drivers.length > 0 && (
+                        <select
+                          className="kds-driver"
+                          defaultValue=""
+                          onChange={(e) => e.target.value && move(o.id, "delivering", e.target.value)}
+                        >
+                          <option value="">Assign driver…</option>
+                          {drivers.map((d) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      )}
                       {o.status === "ready" && (
                         <button type="button" className="kds-done" onClick={() => move(o.id, "completed")}>
                           Handed over
+                        </button>
+                      )}
+                      {o.status === "delivering" && (
+                        <button type="button" className="kds-done" onClick={() => move(o.id, "completed")}>
+                          Delivered
                         </button>
                       )}
                     </footer>

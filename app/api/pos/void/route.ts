@@ -4,6 +4,7 @@ import { getPosSession } from "@/lib/pos-auth";
 import { hashPin, isValidPin } from "@/lib/pin";
 import { recordMovements } from "@/lib/stock";
 import { logAction } from "@/lib/audit";
+import { reversePoints } from "@/lib/loyalty";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,6 +83,13 @@ export async function POST(req: Request) {
         employeeId: session.sub,
       })),
     );
+  }
+
+  // points go back too — earned and redeemed alike
+  try {
+    await reversePoints(order.id);
+  } catch (e) {
+    console.error("void: points reversal failed", e);
   }
 
   const history = Array.isArray(order.statusHistory) ? (order.statusHistory as unknown[]) : [];

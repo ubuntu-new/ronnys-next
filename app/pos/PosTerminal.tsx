@@ -118,6 +118,7 @@ export default function PosTerminal({
   const [known, setKnown] = useState<Customer | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
   const [addrId, setAddrId] = useState<string | null>(null);
+  const [usePoints, setUsePoints] = useState(false);
   const [suggestions, setSuggestions] = useState<Customer[]>([]);
   const [showSug, setShowSug] = useState(false);
   const [showCustomer, setShowCustomer] = useState(false);
@@ -486,6 +487,7 @@ export default function PosTerminal({
     setCustomer({ name: "", phone: "", address: "", notes: "" });
     setKnown(null);
     setAddrId(null);
+    setUsePoints(false);
     setTendered("");
   };
 
@@ -522,6 +524,7 @@ export default function PosTerminal({
       localNo,
       fulfillment,
       userId: known?.id,
+      redeemPoints: usePoints && known ? known.points : 0,
       customerName: customer.name,
       customerPhone: customer.phone,
       address: customer.address,
@@ -876,9 +879,25 @@ export default function PosTerminal({
           </div>
 
           <div className="pos-foot">
+            {known && known.points >= 100 && (
+              <button
+                type="button"
+                className={`pos-points${usePoints ? " on" : ""}`}
+                onClick={() => setUsePoints((v) => !v)}
+              >
+                {usePoints ? "✓ " : ""}Use {known.points} points
+                <em>−{money(Math.min(known.points * 0.1, subtotal))} ₾</em>
+              </button>
+            )}
+
             <div className="pos-total">
               <span>{count} items</span>
-              <b>{money(subtotal)} ₾</b>
+              <b>
+                {usePoints && known
+                  ? money(Math.max(0, subtotal - Math.min(known.points * 0.1, subtotal)))
+                  : money(subtotal)}{" "}
+                ₾
+              </b>
             </div>
             {error && <p className="pos-err">{error}</p>}
             <div className="pos-foot-row">

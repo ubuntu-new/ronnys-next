@@ -28,8 +28,15 @@ export async function GET(req: Request) {
     include: { items: true },
   });
 
+  const drivers = await db.employee.findMany({
+    where: { role: "driver", active: true, deletedAt: null },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+
   return NextResponse.json({
     at: new Date().toISOString(),
+    drivers,
     orders: orders.map((o) => ({
       id: o.id,
       no: o.orderNo,
@@ -56,14 +63,14 @@ export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  let body: { id?: string; status?: string };
+  let body: { id?: string; status?: string; driverId?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
 
-  const allowed = ["confirmed", "preparing", "ready", "completed"];
+  const allowed = ["confirmed", "preparing", "ready", "delivering", "completed"];
   if (!body.id || !body.status || !allowed.includes(body.status)) {
     return NextResponse.json({ error: "bad status" }, { status: 400 });
   }
@@ -79,9 +86,17 @@ export async function POST(req: Request) {
 
   const history = Array.isArray(order.statusHistory) ? (order.statusHistory as unknown[]) : [];
 
+  // ── driver assignment ──
+  // Recorded with the status change, so "who took it" and "when" are one fact.
+  const assign =
+    body.status === "delivering" && body.driverId
+      ? { driverId: body.driverId, assignedAt: new Date() }
+      : {};
+
   await db.order.update({
     where: { id: body.id },
     data: {
+      ...assign,
       status: body.status as never,
       statusHistory: [
         ...history,

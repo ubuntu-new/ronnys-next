@@ -41,12 +41,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
 
   const o = await db.order.findUnique({
     where: { id },
-    include: {
-      branch: true,
-      items: true,
-      createdBy: { select: { name: true, role: true } },
-      driver: { select: { name: true } },
-    },
+    include: { branch: true, items: true },
   });
   if (!o) notFound();
 
@@ -122,29 +117,6 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
         <h2>კლიენტი</h2>
         <table className="admin-table">
           <tbody>
-            {(o.createdBy || o.posId) && (
-              <tr>
-                <td style={{ width: 160 }}>ვინ მიიღო</td>
-                <td>
-                  {o.createdBy?.name ?? (o.source === "web" ? "საიტიდან" : o.source)}
-                  {o.posId && <span className="hint"> · {o.posId}</span>}
-                </td>
-              </tr>
-            )}
-            {o.driver && (
-              <tr>
-                <td>ვინ წაიღო</td>
-                <td>
-                  🛵 {o.driver.name}
-                  {o.deliveredAt && (
-                    <span className="hint">
-                      {" "}
-                      · მიიტანა {new Date(o.deliveredAt).toLocaleString("ka-GE")}
-                    </span>
-                  )}
-                </td>
-              </tr>
-            )}
             <tr>
               <td style={{ width: 160 }}>სახელი</td>
               <td>{o.customerName ?? "—"}</td>
